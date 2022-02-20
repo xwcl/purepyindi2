@@ -1,10 +1,8 @@
-from multiprocessing.sharedctypes import Value
-import typing
 import logging
-log = logging.getLogger(__name__)
 from collections import defaultdict
-from . import constants, transports, properties, messages
+from . import constants, transports, properties, messages, utils
 
+log = logging.getLogger(__name__)
 
 class IndiClient:
     def __init__(self, connection=None):
@@ -20,32 +18,48 @@ class IndiClient:
             self.connect()
 
     def get_properties(self, *args):
+        '''Subscribe to some or all properties available through the
+        INDI server
+
+        Parameters
+        ----------
+        key_or_iterable : optional
+            Default is all devices. If passed a string, it will be used
+            as the device name to request properties from. If passed a
+            ``device.property`` pair, then only that property will be
+            requested. If passed an iterable, a ``<getProperties>``
+            message will be emitted for each.
+        '''
         if len(args) == 0:
             msg = messages.GetProperties()
             self._register_interest(constants.ALL, constants.ALL)
             self.connection.send(msg)
+        elif len(args) == 1 and utils.is_iterable(args[0]) and not isinstance(args[0], str):
+            for spec in args[0]:
+                self.get_properties(spec)
         elif isinstance(args[0], str):
-            device_name = args[0]
-            if len(args) == 2:
-                property_name = args[1]
+            if '.' in args[0]:
+                parts = args[0].split('.', 1)
+            else:
+                parts = [args[0]]
+            device_name = parts[0]
+            if len(parts) == 2:
+                property_name = parts[1]
+                msg = messages.GetProperties(device=device_name, name=property_name)
             else:
                 property_name = constants.ALL
+                msg = messages.GetProperties(device=device_name)
             self._register_interest(device_name, property_name)
-            msg = messages.GetProperties(device=device_name, name=property_name)
             self.connection.send(msg)
-        elif len(args) == 1:
-            for spec in args[0]:
-                parts = spec.split('.')
-                parts = parts[:2]
-                self.get_properties(*parts)
         else:
             raise ValueError("Supply arguments as list of dotted property specs or as (device, property)")
 
 
     def connect(self, host: str=constants.DEFAULT_HOST, port: int=constants.DEFAULT_PORT):
-        if self.connection is not None:
+        if self.connection is None:
             self.connection = transports.IndiTcpConnection(host=host, port=port)
         self.connection.register_message_handler(self.handle_message)
+        self.connection.start()
 
     def _register_interest(self, device_name, property_name):
         self._interested_properties.add((device_name, property_name))

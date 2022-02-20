@@ -90,6 +90,9 @@ class ValueMessageBase(MessageBase):
     # chardata has been seen to set _value:
     _value: object = dataclasses.field(default=None)
 
+    def get(self):
+        return self._value
+
     def set_from_text(self, value):
         self._value = value
 
@@ -197,6 +200,9 @@ class PropertyMessageBase(MessageBase):
             el.append(self._elements[property_element].to_xml_element())
         return el
 
+    def elements(self):
+        return self._elements.items()
+
     def __contains__(self, key):
         return key in self._elements
     
@@ -205,6 +211,9 @@ class PropertyMessageBase(MessageBase):
             return self._elements[key]._value
         except KeyError:
             raise KeyError(f"No element name {key} in property")
+
+    def __iter__(self):
+        return iter(self._elements.keys())
 
     def apply_update(self, message):
         did_change = False
@@ -220,8 +229,8 @@ class PropertyMessageBase(MessageBase):
                 else:
                     log.debug(f"Got element {element_name} as {message[element_name]} but haven't seen it before")
             current_value = self._elements[element_name]._value
-            if current_value != message._elements[element_name].value:
-                self._elements[element_name]._value = message._elements[element_name].value
+            if current_value != message._elements[element_name]._value:
+                self._elements[element_name]._value = message._elements[element_name]._value
                 did_change = True
         return did_change
 
@@ -230,6 +239,8 @@ class DefSetMessageBase(PropertyMessageBase):
     timeout: Optional[str] = None
     message: Optional[str] = None
     state: Optional[constants.PropertyState] = None
+    label: Optional[str] = None
+    group: Optional[str] = None
 
     def apply_update(self, message):
         did_change = super().apply_update(message)
@@ -239,16 +250,6 @@ class DefSetMessageBase(PropertyMessageBase):
         if message.state is not None:
             self.state = message.state
             did_change = True
-        return did_change
-
-@message
-class DefVector(DefSetMessageBase):
-    state: constants.PropertyState = constants.PropertyState.OK # not optional for def
-    label: Optional[str] = None
-    group: Optional[str] = None
-
-    def apply_update(self, message) -> bool:
-        did_change = super().apply_update(message)
         if message.label is not None:
             self.label = message.label
             did_change = True
@@ -256,8 +257,10 @@ class DefVector(DefSetMessageBase):
             self.group = message.group
             did_change = True
         return did_change
-        
 
+@message
+class DefVector(DefSetMessageBase):
+    state: constants.PropertyState = constants.PropertyState.OK # not optional for def
 
 @message
 class DefSettableVector(DefVector):
@@ -270,10 +273,6 @@ class DefSettableVector(DefVector):
             did_change = True
         return did_change
 
-### common elements used as children
-
-### the rest in the same order as INDI protocol v1.7 document v1.3
-
 # Define properties and initial values
 
 @message
@@ -284,8 +283,6 @@ class DefTextVector(DefSettableVector):
 @message
 class DefNumberVector(DefSettableVector):
     pass
-
-
 
 @message
 class DefSwitchVector(DefSettableVector):
@@ -306,7 +303,13 @@ class DefLightVector(DefVector):
 
 @message
 class SetVector(DefSetMessageBase):
-    pass
+    # Though marked optional in superclass, these attributes
+    # must not be set in set*Vector messages
+    def __post_init__(self):
+        if self.label != None:
+            raise ValueError(f"label attribute cannot be set on {self.__class__.__name__}")
+        if self.group != None:
+            raise ValueError(f"label attribute cannot be set on {self.__class__.__name__}")
 
 @message
 class SetTextVector(SetVector):
@@ -409,6 +412,10 @@ IndiTopLevelMessage = Union[
 ]
 IndiDefMessage = Union[DefTextVector, DefNumberVector, DefSwitchVector, DefLightVector]
 IndiSetMessage = Union[SetTextVector, SetNumberVector, SetSwitchVector, SetLightVector]
+IndiDefSetMessage = Union[
+    DefTextVector, DefNumberVector, DefSwitchVector, DefLightVector, SetTextVector,
+    SetNumberVector, SetSwitchVector, SetLightVector
+]
 IndiDefSetDelMessage = Union[
     DefTextVector,
     DefNumberVector,

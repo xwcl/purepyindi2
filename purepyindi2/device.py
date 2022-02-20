@@ -65,7 +65,7 @@ class Device:
                         self.connection.send(self.properties[message.name])
                 else:
                     self.send_all_properties()
-        elif isinstance(message, typing.get_args(messages.IndiNewMessage)):
+        elif isinstance(message, messages.IndiNewMessage):
             if message.device == self.name and message.name in self.properties:
                 for cb in self.callbacks[message.name]:
                     try:
@@ -73,6 +73,8 @@ class Device:
                         log.debug(f"Fired callback {cb=} with {message=}")
                     except Exception:
                         log.exception(f"Caught exception from property {message.name} callback {cb}")
+                        import sys
+                        sys.exit(1)
 
     def setup(self):
         pass

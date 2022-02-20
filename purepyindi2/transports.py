@@ -64,8 +64,10 @@ class IndiTcpConnection(IndiConnection):
                 msg = self._outbound_queue.get(True, BLOCK_TIMEOUT_SEC)
                 data = msg.to_xml_bytes()
                 transport.sendall(data + b'\n')
+                log.debug(f"Sent: {data}")
             except queue.Empty:
                 pass
+        transport.shutdown(socket.SHUT_RD)
 
     def _handle_inbound(self, transport):
         log.debug("Inbound handler started")
@@ -81,6 +83,7 @@ class IndiTcpConnection(IndiConnection):
                     self.handle_message(update)
             except queue.Empty:
                 pass
+        transport.shutdown(socket.SHUT_RD)
 
     def start(self):
         if self.status is not ConnectionStatus.CONNECTED:

@@ -17,12 +17,20 @@ from .messages import IndiElementMessage
 
 log = logging.getLogger(__name__)
 
-def parse_optional_timestamp(timestamp : typing.Optional[str]) -> typing.Optional[datetime.datetime]:
-    if timestamp is None:
-        return None
-    dt = datetime.datetime.strptime(timestamp, ISO_TIMESTAMP_FORMAT)
-    dt = dt.replace(tzinfo=datetime.timezone.utc)
-    return dt
+try:
+    import ciso8601
+    _parse_datetime = ciso8601.parse_datetime
+    def parse_optional_timestamp(timestamp : typing.Optional[str]) -> typing.Optional[datetime.datetime]:
+        if timestamp is None:
+            return None
+        return ciso8601.parse_datetime(timestamp)
+except ImportError:
+    def parse_optional_timestamp(timestamp : typing.Optional[str]) -> typing.Optional[datetime.datetime]:
+        if timestamp is None:
+            return None
+        dt = datetime.datetime.strptime(timestamp, ISO_TIMESTAMP_FORMAT)
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt
 
 class IndiStreamParser:
     PROPERTY_DEF_LOOKUP = {x.tag(): x for x in typing.get_args(IndiDefMessage)}
