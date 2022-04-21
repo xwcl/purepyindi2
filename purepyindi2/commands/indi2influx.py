@@ -48,14 +48,18 @@ def main():
     write_api = db_client.write_api()
     atexit.register(on_exit, db_client, write_api)
 
-    c = client.IndiClient()
-    callback = partial(relay, write_api=write_api, bucket=influx_bucket)
-    c.register_callback(callback)
-    c.connect()
-    c.get_properties()
-    log.info("Listening for metrics")
     while True:
-        time.sleep(1)
+        try:
+            c = client.IndiClient()
+            callback = partial(relay, write_api=write_api, bucket=influx_bucket)
+            c.register_callback(callback)
+            c.connect()
+            c.get_properties()
+            log.info("Listening for metrics")
+            while True:
+                time.sleep(1)
+        except Exception:
+            log.exception("Restarting IndiClient on error...")
 
 if __name__ == "__main__":
     main()
