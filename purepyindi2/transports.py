@@ -34,7 +34,7 @@ class IndiConnection:
             try:
                 handler(message)
             except Exception as e:
-                log.exception(f"Caught exception in an inbound message handler {handler}")
+                log.exception(f"Caught exception in an inbound message handler {handler} for {message}")
 
     def send(self, indi_action):
         self._outbound_queue.put_nowait(indi_action)

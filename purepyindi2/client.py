@@ -101,10 +101,10 @@ class IndiClient:
                     del self._devices[k]
             else:
                 device = self._devices[message.device]
-                for prop in device:
-                    if message.name is None or prop.name == message.name:
-                        del device[message.name]
-                        log.debug(f"Deleted matching {message.name} property on device {message.device}")
+                for propname in device:
+                    if message.name is None or property_name == message.name:
+                        del device[property_name]
+                        log.debug(f"Deleted matching {property_name} property on device {message.device}")
         elif isinstance(message, (messages.IndiDefMessage, messages.IndiSetMessage)):
             device_name = message.device
             property_name = message.name
