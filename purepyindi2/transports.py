@@ -1,5 +1,8 @@
 import logging
+import time
+import asyncio
 from pprint import pformat
+from collections import defaultdict
 import queue
 import socket
 import sys
@@ -8,9 +11,18 @@ from .parser import IndiStreamParser
 from .constants import (
     CHUNK_MAX_READ_SIZE,
     BLOCK_TIMEOUT_SEC,
+    RECONNECTION_DELAY_SEC,
     ConnectionStatus,
     DEFAULT_HOST,
     DEFAULT_PORT,
+    TransportEvent,
+)
+
+__all__ = (
+    'IndiConnection',
+    'IndiTcpConnection',
+    'IndiPipeConnection',
+    'AsyncIndiTcpConnection',
 )
 
 log = logging.getLogger(__name__)
@@ -24,17 +36,20 @@ class IndiConnection:
         self._inbound_queue = self.QUEUE_CLASS()
         self._parser = IndiStreamParser(self._inbound_queue)
         self._writer = self._reader = None
-        self.inbound_message_handlers = set()
+        self.event_callbacks = defaultdict(set)
 
-    def register_message_handler(self, handler):
-        self.inbound_message_handlers.add(handler)
+    def add_callback(self, event: TransportEvent, callback):
+        self.event_callbacks[event].add(callback)
 
-    def handle_message(self, message):
-        for handler in self.inbound_message_handlers:
+    def remove_callback(self, event: TransportEvent, callback):
+        self.event_callbacks[event].remove(callback)
+
+    def dispatch_callbacks(self, event: TransportEvent, payload):
+        for callback in self.event_callbacks[event]:
             try:
-                handler(message)
+                callback(payload)
             except Exception as e:
-                log.exception(f"Caught exception in an inbound message handler {handler} for {message}")
+                log.exception(f"Caught exception in {event.name} callback {callback}")
 
     def send(self, indi_action):
         self._outbound_queue.put_nowait(indi_action)
@@ -51,10 +66,13 @@ class IndiConnection:
     def stop(self):
         raise NotImplementedError()
 
-
 class IndiTcpConnection(IndiConnection):
-    def __init__(self, *args, host=DEFAULT_HOST, port=DEFAULT_PORT, **kwargs):
+    reconnect_automatically : bool = True
+    def __init__(self, *args, host=DEFAULT_HOST, port=DEFAULT_PORT, reconnect_automatically=None, **kwargs):
+        if reconnect_automatically is not None:
+            self.reconnect_automatically = reconnect_automatically
         self.host, self.port = host, port
+        self._monitor = None
         super().__init__(*args, **kwargs)
 
     def _handle_outbound(self, transport : socket.socket):
@@ -65,6 +83,7 @@ class IndiTcpConnection(IndiConnection):
                 data = msg.to_xml_bytes()
                 transport.sendall(data + b'\n')
                 log.debug(f"Sent: {data}")
+                self.dispatch_callbacks(TransportEvent.outbound, msg)
             except queue.Empty:
                 pass
         transport.shutdown(socket.SHUT_RD)
@@ -76,22 +95,25 @@ class IndiTcpConnection(IndiConnection):
                 data = transport.recv(CHUNK_MAX_READ_SIZE)
             except socket.timeout:
                 continue
+            except socket.error:
+                self.status = ConnectionStatus.RECONNECTING
+                return
             self._parser.parse(data)
             try:
                 while True:
                     update = self._inbound_queue.get_nowait()
-                    self.handle_message(update)
+                    self.dispatch_callbacks(TransportEvent.inbound, update)
             except queue.Empty:
                 pass
         transport.shutdown(socket.SHUT_RD)
 
-    def start(self):
-        if self.status is not ConnectionStatus.CONNECTED:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    def _reconnection_monitor(self):
+        if self.status is not ConnectionStatus.STOPPED:
             self._socket.connect((self.host, self.port))
             self._socket.settimeout(BLOCK_TIMEOUT_SEC)
             self.status = ConnectionStatus.CONNECTED
             log.debug(f"Connected to {self.host}:{self.port}")
+            self.dispatch_callbacks(TransportEvent.connection, self.status)
             self._writer = threading.Thread(
                 target=self._handle_outbound,
                 name=f'{self.__class__.__name__}-sender',
@@ -106,12 +128,35 @@ class IndiTcpConnection(IndiConnection):
                 args=(self._socket,)
             )
             self._reader.start()
+            try:
+                self._writer.join()
+                self._reader.join()
+            except Exception:
+                if not self.reconnect_automatically:
+                    self.status = ConnectionStatus.ERROR
+                    self.dispatch_callbacks(TransportEvent.connection, self.status)
+                    raise
+                else:
+                    self.status = ConnectionStatus.RECONNECTING
+                    self.dispatch_callbacks(TransportEvent.connection, self.status)
+                    log.exception(f"Connection failed. Reconnecting to {self.host}:{self.port} in {RECONNECTION_DELAY_SEC} sec...")
+                    time.sleep(RECONNECTION_DELAY_SEC)
+
+    def start(self):
+        if self.status is not ConnectionStatus.CONNECTED:
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._monitor = threading.Thread(
+                target=self._reconnection_monitor,
+                name=f'{self.__class__.__name__}-monitor',
+                daemon=True,
+            )
+            self._monitor.start()
 
     def stop(self):
         if self.status is ConnectionStatus.CONNECTED:
             self.status = ConnectionStatus.STOPPED
-            self._writer.join()
-            self._reader.join()
+            self.dispatch_callbacks(TransportEvent.connection, self.status)
+            self._reconnection_monitor.join()
             self._writer = None
             self._reader = None
 
@@ -129,6 +174,7 @@ class IndiPipeConnection(IndiConnection):
                 res = self._outbound_queue.get(True, BLOCK_TIMEOUT_SEC)
                 transport.write(res.to_xml_str() + '\n')
                 transport.flush()
+                self.dispatch_callbacks(TransportEvent.outbound, res)
             except queue.Empty:
                 pass
 
@@ -140,7 +186,7 @@ class IndiPipeConnection(IndiConnection):
             try:
                 while True:
                     update = self._inbound_queue.get_nowait()
-                    self.handle_message(update)
+                    self.dispatch_callbacks(TransportEvent.inbound, update)
             except queue.Empty:
                 pass
 
@@ -167,3 +213,126 @@ class IndiPipeConnection(IndiConnection):
             self.status = ConnectionStatus.STOPPED
             self._writer.join()
             self._reader.join()
+
+
+
+class AsyncIndiTcpConnection(IndiTcpConnection):
+    QUEUE_CLASS = asyncio.Queue
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.async_event_callbacks = defaultdict(set)
+    # async def wait_for_properties(self, properties, timeout=None):
+    #     '''
+    #     Supply an iterable of ``device_name.property_name`` strings
+    #     and optionally a `timeout` in seconds, and this function will block
+    #     until they are all available. Returns number of seconds it took, in case you're curious.
+    #     '''
+    #     ready = False
+    #     started = time.time()
+    #     elapsed = 0
+    #     while not ready:
+    #         has_all = self.has_properties(properties)
+    #         if has_all:
+    #             ready = True
+    #         else:
+    #             elapsed = time.time() - started
+    #             if timeout is None or elapsed < timeout:
+    #                 await asyncio.sleep(1)
+    #             else:
+    #                 raise TimeoutError(f"Timed out waiting for properties: {properties}")
+    #     return time.time() - started
+    # async def wait_for_state(self, state_dict, wait_for_properties=False, timeout=None):
+    #     raise NotImplementedError("Still needs async implementation!")
+
+    def add_async_callback(self, event: TransportEvent, callback):
+        self.async_event_callbacks[event].add(callback)
+
+    def remove_async_callback(self, event: TransportEvent, callback):
+        self.async_event_callbacks[event].remove(callback)
+
+    async def dispatch_async_callbacks(self, event: TransportEvent, payload):
+        for callback in self.event_callbacks[event]:
+            try:
+                await callback(payload)
+            except Exception as e:
+                log.exception(f"Caught exception in {event.name} callback {callback}")
+
+    def start(self):
+        raise NotImplementedError("To start, schedule an async task for AsyncINDIClient.run")
+    async def run(self, reconnect_automatically=False):
+        while self.status is not ConnectionStatus.STOPPED:
+            try:
+                reader_handle, writer_handle = await asyncio.open_connection(
+                    self.host,
+                    self.port
+                )
+                addr = writer_handle.get_extra_info("peername")
+                log.info(f"Connected to {addr!r}")
+                self.status = ConnectionStatus.CONNECTED
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                await self.dispatch_async_callbacks(TransportEvent.connection, self.status)
+                self._reader = asyncio.ensure_future(self._handle_inbound(reader_handle))
+                self._writer = asyncio.ensure_future(self._handle_outbound(writer_handle))
+                try:
+                    await asyncio.gather(
+                        self._reader, self._writer
+                    )
+                except asyncio.CancelledError:
+                    continue
+            except ConnectionError as e:
+                log.warn(f"Failed to connect: {repr(e)}")
+                if reconnect_automatically:
+                    log.warn(f"Retrying in {RECONNECTION_DELAY_SEC} seconds")
+            except Exception as e:
+                log.warn(f"Swallowed exception: {type(e)}, {e}")
+                raise
+            finally:
+                self._cancel_tasks()
+            if reconnect_automatically:
+                self.status = ConnectionStatus.RECONNECTING
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                await self.dispatch_async_callbacks(TransportEvent.connection, self.status)
+                await asyncio.sleep(RECONNECTION_DELAY_SEC)
+            else:
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                await self.dispatch_async_callbacks(TransportEvent.connection, self.status)
+                raise ConnectionError(f"Got disconnected from {self.host}:{self.port}, not attempting reconnection")
+    def _cancel_tasks(self):
+        if self._reader is not None:
+            self._reader.cancel()
+        if self._writer is not None:
+            self._writer.cancel()
+    async def stop(self):
+        self.status = ConnectionStatus.STOPPED
+        self._cancel_tasks()
+    async def _handle_inbound(self, reader_handle):
+        while self.status == ConnectionStatus.CONNECTED:
+            try:
+                data = await asyncio.wait_for(reader_handle.read(CHUNK_MAX_READ_SIZE), BLOCK_TIMEOUT_SEC)
+            except asyncio.TimeoutError:
+                log.debug(f"No data for {BLOCK_TIMEOUT_SEC} sec")
+                continue
+            if data == b'':
+                log.debug("Got EOF from server")
+                raise ConnectionError("Got EOF from server")
+            log.debug(f"Feeding to parser: {repr(data)}")
+            self._parser.parse(data)
+            while not self._inbound_queue.empty():
+                update = await self._inbound_queue.get()
+                log.debug(f"Got update:\n{pformat(update)}")
+                self.dispatch_callbacks(TransportEvent.inbound, update)
+                await self.dispatch_async_callbacks(TransportEvent.inbound, update)
+
+    async def _handle_outbound(self, writer_handle):
+        while self.status == ConnectionStatus.CONNECTED:
+            try:
+                message = await self._outbound_queue.get()
+                data = message.to_xml_bytes()
+                writer_handle.write(data + b'\n')
+                await writer_handle.drain()
+                self.dispatch_callbacks(TransportEvent.outbound, message)
+                await self.dispatch_async_callbacks(TransportEvent.outbound, message)
+            except asyncio.CancelledError:
+                writer_handle.close()
+                await writer_handle.wait_closed()
+                raise

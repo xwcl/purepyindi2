@@ -6,6 +6,8 @@ from . import constants, transports, properties, messages, utils
 
 log = logging.getLogger(__name__)
 
+__all__ = ['IndiClient']
+
 class IndiClient:
     def __init__(self, connection=None):
         self._devices = defaultdict(dict)
@@ -102,7 +104,7 @@ class IndiClient:
         self.last_get_properties_scope = None
         if self.connection is None:
             self.connection = transports.IndiTcpConnection(host=host, port=port)
-        self.connection.register_message_handler(self.handle_message)
+        self.connection.add_callback(constants.TransportEvent.inbound, self.handle_message)
         self.connection.start()
 
     def _register_interest(self, device_name, property_name):

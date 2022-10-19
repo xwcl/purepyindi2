@@ -25,7 +25,7 @@ class Device:
         self.callbacks = defaultdict(list)
         self.connection = transports.IndiPipeConnection()
         self.properties : dict[str,IndiProperty] = {}
-        self.connection.register_message_handler(self.handle_message)
+        self.connection.add_callback(constants.TransportEvent.inbound, self.handle_message)
         self.client = client.IndiClient(self.connection)
 
     def add_property(

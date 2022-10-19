@@ -179,6 +179,7 @@ class IndiStreamParser:
             log.debug(pformat(self.pending_update))
             self.update_queue.put(self.pending_update)
             self.pending_update = None
+            log.debug("Cleared pending update")
         else:
             log.debug(f"Unhandled tag <{tag_name}> closed")
 
