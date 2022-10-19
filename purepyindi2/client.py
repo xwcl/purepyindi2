@@ -20,6 +20,29 @@ class IndiClient:
         if self.connection is not None:
             self.connect()
 
+    def to_serializable(self) -> dict[str, dict[str, properties.IndiProperty]]:
+        '''Return a dict mapping device names to dicts of
+        properties (dataclasses, keyed by name). Can be serialized by
+        a dataclass- and enum-aware serializer.
+        '''
+        out = {'devices': {}}
+        devices = out['devices']
+        for devname in self._devices:
+            devices[devname] = {}
+            thisdev = devices[devname]
+            for propname in self._devices[devname]:
+                thisdev[propname] = dataclasses.asdict(self._devices[devname][propname])
+                # _role is always client in this context, save some bytes
+                del thisdev[propname]['_role']
+        return out
+
+    def to_json(self, **kwargs):
+        '''Serialize devices and properties with orjson, passing
+        through arguments to `orjson.dumps`. Use `to_serializable()` to
+        get the dict of Python types.'''
+        import orjson
+        return orjson.dumps(self.to_serializable(), **kwargs)
+
     def get_properties(self, *args):
         '''Subscribe to some or all properties available through the
         INDI server
