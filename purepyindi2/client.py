@@ -1,4 +1,6 @@
 import logging
+import dataclasses
+import warnings
 from collections import defaultdict
 from . import constants, transports, properties, messages, utils
 
@@ -14,6 +16,7 @@ class IndiClient:
         self.callbacks = defaultdict(lambda: defaultdict(list))
         self._interested_properties = set()
         self.connection = connection
+        self.last_get_properties_scope = None
         if self.connection is not None:
             self.connect()
 
@@ -34,6 +37,13 @@ class IndiClient:
             msg = messages.GetProperties()
             self._register_interest(constants.ALL, constants.ALL)
             self.connection.send(msg)
+            if self.last_get_properties_scope is not None:
+                warnings.warn(utils.unwrap(f"""
+                    Since get_properties() was first called with
+                    {self.last_get_properties_scope} (device,
+                    property) scope, enumerating all devices and
+                    properties is not possible without disconnecting
+                    and reconnecting."""))
         elif len(args) == 1 and utils.is_iterable(args[0]) and not isinstance(args[0], str):
             for spec in args[0]:
                 self.get_properties(spec)
@@ -48,14 +58,25 @@ class IndiClient:
                 msg = messages.GetProperties(device=device_name, name=property_name)
             else:
                 property_name = constants.ALL
+                if self.last_get_properties_scope is not None and self.last_get_properties_scope[1] is not constants.ALL:
+                    warnings.warn(utils.unwrap(f"""
+                        Since get_properties() was first called with
+                        {self.last_get_properties_scope} (device,
+                        property) scope, enumerating all properties is
+                        not possible without disconnecting and
+                        reconnecting."""))
                 msg = messages.GetProperties(device=device_name)
             self._register_interest(device_name, property_name)
+            if self.last_get_properties_scope is None:
+                self.last_get_properties_scope = (device_name, property_name)
             self.connection.send(msg)
         else:
             raise ValueError("Supply arguments as list of dotted property specs or as (device, property)")
 
 
     def connect(self, host: str=constants.DEFAULT_HOST, port: int=constants.DEFAULT_PORT):
+        # reset warning in case this is not the first time we're connecting
+        self.last_get_properties_scope = None
         if self.connection is None:
             self.connection = transports.IndiTcpConnection(host=host, port=port)
         self.connection.register_message_handler(self.handle_message)
@@ -109,7 +130,7 @@ class IndiClient:
             device_name = message.device
             property_name = message.name
             interested = (
-                (constants.ALL, constants.ALL) in self._interested_properties or 
+                (constants.ALL, constants.ALL) in self._interested_properties or
                 (device_name, constants.ALL) in self._interested_properties or
                 (device_name, property_name) in self._interested_properties
             )
