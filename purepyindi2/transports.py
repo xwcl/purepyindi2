@@ -221,67 +221,43 @@ def is_fifo(path):
     return stat.S_ISFIFO(os.stat(path).st_mode)
 
 def make_fifo_and_open(path, mode):
-    print(path)
     if exists(path):
         if not is_fifo(path):
             raise RuntimeError(f"{path} exists and is not a FIFO")
     else:
         os.mkfifo(path, mode=(
-            stat.S_IRUSR | stat.S_IWUSR |
-            stat.S_IRGRP | stat.S_IWGRP
+            stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP
         ))
     fd = os.open(path, os.O_RDWR)
     return os.fdopen(fd, mode)
 
-class XIndiFifoConnection(IndiPipeConnection):
+class IndiFifoConnection(IndiPipeConnection):
     def _make_and_open_fifos(self):
         return (
             make_fifo_and_open(self.input_fifo_path, 'r'),
             make_fifo_and_open(self.output_fifo_path, 'w'),
             make_fifo_and_open(self.control_fifo_path, 'w'),
         )
-    def __init__(self, *args, name=None, fifos_root="/opt/MagAOX/drivers/fifos/", **kwargs):
+    def __init__(self, *args, name=None, fifos_root="/tmp", **kwargs):
         if name is None:
             raise RuntimeError("Name must be supplied for FIFO transport")
         self.input_fifo_path = os.path.join(fifos_root, f"{name}.in")
         self.output_fifo_path = os.path.join(fifos_root, f"{name}.out")
         self.control_fifo_path = os.path.join(fifos_root, f"{name}.ctrl")
         input_pipe, output_pipe, self.control_pipe = self._make_and_open_fifos()
-        print('made and opened')
         super().__init__(*args, input_pipe=input_pipe, output_pipe=output_pipe, **kwargs)
 
     def start(self):
-        self.control_pipe.write('1\n')
-        self.control_pipe.flush()
-        super().start()
+        if not self.status is ConnectionStatus.CONNECTED:
+            self.control_pipe.write('1')
+            self.control_pipe.flush()
+            super().start()
 
 class AsyncIndiTcpConnection(IndiTcpConnection):
     QUEUE_CLASS = asyncio.Queue
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.async_event_callbacks = defaultdict(set)
-    # async def wait_for_properties(self, properties, timeout=None):
-    #     '''
-    #     Supply an iterable of ``device_name.property_name`` strings
-    #     and optionally a `timeout` in seconds, and this function will block
-    #     until they are all available. Returns number of seconds it took, in case you're curious.
-    #     '''
-    #     ready = False
-    #     started = time.time()
-    #     elapsed = 0
-    #     while not ready:
-    #         has_all = self.has_properties(properties)
-    #         if has_all:
-    #             ready = True
-    #         else:
-    #             elapsed = time.time() - started
-    #             if timeout is None or elapsed < timeout:
-    #                 await asyncio.sleep(1)
-    #             else:
-    #                 raise TimeoutError(f"Timed out waiting for properties: {properties}")
-    #     return time.time() - started
-    # async def wait_for_state(self, state_dict, wait_for_properties=False, timeout=None):
-    #     raise NotImplementedError("Still needs async implementation!")
 
     def add_async_callback(self, event: TransportEvent, callback):
         self.async_event_callbacks[event].add(callback)

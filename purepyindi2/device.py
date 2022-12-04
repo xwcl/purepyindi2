@@ -1,24 +1,25 @@
 import time
-import os
-import fcntl
+from functools import partial
 import logging
-import select
-import sys
-import threading
 from collections import defaultdict
-from queue import Queue, Empty
 import typing
-from .properties import IndiProperty, Role
+from .properties import IndiProperty
 from . import messages, constants, transports, client, properties
+from .client import IndiClient
 
 log = logging.getLogger(__name__)
 
 PROPERTY_CALLBACK = typing.Callable[[properties.IndiProperty, messages.IndiDefSetDelMessage], None]
 
+class MockClient:
+    def __getattr__(self, name):
+        raise RuntimeError(f"Tried to access {name} attribute of {self} before the client connection had started")
+
 class Device:
     status : constants.ConnectionStatus = constants.ConnectionStatus.STOPPED
     sleep_interval_sec : float = 1
     _setup_complete : bool = False  # set True when setup() has run
+    client : typing.Optional[IndiClient] = MockClient()
 
     def __init__(self, name, connection_class=transports.IndiPipeConnection):
         self.name = name
@@ -26,7 +27,6 @@ class Device:
         self.connection = connection_class()
         self.properties : dict[str,IndiProperty] = {}
         self.connection.add_callback(constants.TransportEvent.inbound, self.handle_message)
-        self.client = client.IndiClient(self.connection)
 
     def add_property(
         self, 
@@ -88,11 +88,18 @@ class Device:
             raise
   
     def run(self):
+        self.connection.start()
         self.setup()
         self._setup_complete = True
+        self.client = client.IndiClient(self.connection)
         while self.connection.status is constants.ConnectionStatus.CONNECTED:
             self.loop()
             time.sleep(self.sleep_interval_sec)
     
     def loop(self):
         log.debug("device %s: running loop logic", self.name)
+
+
+class XDevice(Device):
+    def __init__(self, name, *args, fifos_root="/opt/MagAOX/drivers/fifos", **kwargs):
+        super().__init__(name, *args, connection_class=partial(transports.IndiFifoConnection, name=name, fifos_root=fifos_root), **kwargs)
