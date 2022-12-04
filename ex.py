@@ -1,5 +1,9 @@
-from purepyindi2 import device, properties
+import logging
+from functools import partial
+from purepyindi2 import device, properties, transports
 from purepyindi2.messages import DefNumber
+
+log = logging.getLogger(__name__)
 
 class MyDevice(device.Device):
     def handle_prop1(self, existing_property, new_message):
@@ -23,7 +27,7 @@ class MyDevice(device.Device):
             prop['elem1'] = 5
         self.update_property(prop)
 
-import logging
-log = logging.getLogger(__name__)
+
 logging.basicConfig(level=logging.DEBUG)
-MyDevice(name="foo").main()
+device_name = "foo"
+MyDevice(name=device_name, connection_class=partial(transports.XIndiFifoConnection, name=device_name, fifos_root="/tmp")).main()

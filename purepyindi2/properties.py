@@ -8,6 +8,9 @@ from .constants import PropertyState, Role, SwitchRule, PropertyPerm
 
 log = logging.getLogger(__name__)
 
+class NoSuchElementException(Exception):
+    pass
+
 @dataclasses.dataclass(kw_only=True)
 class IndiProperty:
     device : typing.Optional[str] = None  # omitted when used on device side
@@ -59,6 +62,13 @@ class IndiProperty:
             if self._role is Role.DEVICE:
                 self._elements[element_name]._value = value
         return msg
+
+    def __getitem__(self, key):
+        try:
+            elem = self._elements[key]
+        except KeyError:
+            raise NoSuchElementException(f"No element {repr(key)} in {self}")
+        return elem
 
     def __setitem__(self, key, value):
         self._elements[key].validate(value)

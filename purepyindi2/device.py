@@ -20,10 +20,10 @@ class Device:
     sleep_interval_sec : float = 1
     _setup_complete : bool = False  # set True when setup() has run
 
-    def __init__(self, name):
+    def __init__(self, name, connection_class=transports.IndiPipeConnection):
         self.name = name
         self.callbacks = defaultdict(list)
-        self.connection = transports.IndiPipeConnection()
+        self.connection = connection_class()
         self.properties : dict[str,IndiProperty] = {}
         self.connection.add_callback(constants.TransportEvent.inbound, self.handle_message)
         self.client = client.IndiClient(self.connection)

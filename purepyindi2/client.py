@@ -22,6 +22,17 @@ class IndiClient:
         if self.connection is not None:
             self.connect()
 
+    def __repr__(self):
+        return f"<{self.__class__.__name__}: {self.status.value}, {len(self._devices)} devices found>"
+
+    @property
+    def status(self):
+        return self.connection.status if self.connection is not None else constants.ConnectionStatus.NOT_CONFIGURED
+
+    @property
+    def devices(self):
+        return set(self._devices.keys())
+
     def to_serializable(self) -> dict[str, dict[str, properties.IndiProperty]]:
         '''Return a dict mapping device names to dicts of
         properties (dataclasses, keyed by name). Can be serialized by
@@ -187,7 +198,7 @@ class IndiClient:
             else:
                 return prop
         else:
-            raise ValueError(f"Must supply a device.property or device.property.element string, got {key=}")
+            return {name: prop for name, prop in device_props.items()}
 
     def __setitem__(self, key, value):
         parts = key.split('.', 2)
@@ -204,6 +215,10 @@ class IndiClient:
                 element_name = parts[2]
                 if element_name not in prop:
                     raise KeyError(f"No element {device_name}.{property_name}.{element_name} represented within these properties")
+                try:
+                    value = prop[element_name].value_from_text(value)
+                except Exception:
+                    pass  # if a proper enum value is passed in, it's not an error, but that won't go through value_from_text.
                 msg = prop.make_update(**{element_name: value})
                 self.connection.send(msg)
             else:

@@ -51,6 +51,7 @@ class ConnectionStatus(Enum):
     RECONNECTING = 'reconnecting'
     STOPPED = 'stopped'
     ERROR = 'error'
+    NOT_CONFIGURED = 'not configured'
 
 class PropertyState(Enum):
     IDLE = 'Idle'
@@ -62,6 +63,13 @@ class PropertyPerm(Enum):
     READ_ONLY = 'ro'
     WRITE_ONLY = 'wo'
     READ_WRITE = 'rw'
+
+
+class PropertyKind(Enum):
+    NUMBER = 'num'
+    TEXT = 'txt'
+    SWITCH = 'swt'
+    LIGHT = 'lgt'
 
 class SwitchState(Enum):
     OFF = 'Off'

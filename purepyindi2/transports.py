@@ -6,6 +6,9 @@ from collections import defaultdict
 import queue
 import socket
 import sys
+import os
+from os.path import exists
+import stat
 import threading
 from .parser import IndiStreamParser
 from .constants import (
@@ -214,7 +217,43 @@ class IndiPipeConnection(IndiConnection):
             self._writer.join()
             self._reader.join()
 
+def is_fifo(path):
+    return stat.S_ISFIFO(os.stat(path).st_mode)
 
+def make_fifo_and_open(path, mode):
+    print(path)
+    if exists(path):
+        if not is_fifo(path):
+            raise RuntimeError(f"{path} exists and is not a FIFO")
+    else:
+        os.mkfifo(path, mode=(
+            stat.S_IRUSR | stat.S_IWUSR |
+            stat.S_IRGRP | stat.S_IWGRP
+        ))
+    fd = os.open(path, os.O_RDWR)
+    return os.fdopen(fd, mode)
+
+class XIndiFifoConnection(IndiPipeConnection):
+    def _make_and_open_fifos(self):
+        return (
+            make_fifo_and_open(self.input_fifo_path, 'r'),
+            make_fifo_and_open(self.output_fifo_path, 'w'),
+            make_fifo_and_open(self.control_fifo_path, 'w'),
+        )
+    def __init__(self, *args, name=None, fifos_root="/opt/MagAOX/drivers/fifos/", **kwargs):
+        if name is None:
+            raise RuntimeError("Name must be supplied for FIFO transport")
+        self.input_fifo_path = os.path.join(fifos_root, f"{name}.in")
+        self.output_fifo_path = os.path.join(fifos_root, f"{name}.out")
+        self.control_fifo_path = os.path.join(fifos_root, f"{name}.ctrl")
+        input_pipe, output_pipe, self.control_pipe = self._make_and_open_fifos()
+        print('made and opened')
+        super().__init__(*args, input_pipe=input_pipe, output_pipe=output_pipe, **kwargs)
+
+    def start(self):
+        self.control_pipe.write('1\n')
+        self.control_pipe.flush()
+        super().start()
 
 class AsyncIndiTcpConnection(IndiTcpConnection):
     QUEUE_CLASS = asyncio.Queue
@@ -251,14 +290,15 @@ class AsyncIndiTcpConnection(IndiTcpConnection):
         self.async_event_callbacks[event].remove(callback)
 
     async def dispatch_async_callbacks(self, event: TransportEvent, payload):
-        for callback in self.event_callbacks[event]:
+        for callback in self.async_event_callbacks[event]:
             try:
                 await callback(payload)
             except Exception as e:
                 log.exception(f"Caught exception in {event.name} callback {callback}")
 
     def start(self):
-        raise NotImplementedError("To start, schedule an async task for AsyncINDIClient.run")
+        log.debug("To start, schedule an async task for AsyncINDIClient.run")
+
     async def run(self, reconnect_automatically=False):
         while self.status is not ConnectionStatus.STOPPED:
             try:

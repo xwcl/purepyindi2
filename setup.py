@@ -38,6 +38,7 @@ setup(
         'console_scripts': [
             f'ipyindi={PROJECT}.commands.ipyindi:main',
             f'indi2influx={PROJECT}.commands.indi2influx:main',
+            f'indi2json={PROJECT}.commands.indi2json:main',
         ],
     },
     project_urls={  # Optional

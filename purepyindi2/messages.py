@@ -93,8 +93,15 @@ class ValueMessageBase(MessageBase):
     def get(self):
         return self._value
 
+    @staticmethod
+    def value_from_text(value):
+        return value
+
     def set_from_text(self, value):
-        self._value = value
+        if value is None:
+            self._value = None
+            return
+        self._value = self.value_from_text(value)
 
     def to_xml_element(self):
         el = super().to_xml_element()
@@ -115,35 +122,32 @@ class OneText(ValueMessageBase):
 class OneNumber(ValueMessageBase):
     _value: float
 
-    def set_from_text(self, value):
+    @staticmethod
+    def value_from_text(value):
         if value is None:
-            self._value = None
-            return
+            return None
         try:
             parsed_number = float(value)
         except TypeError:
-            raise ValueError(f"Unparseable number {repr(value)} for {self.name}")
-        self._value = parsed_number
+            raise ValueError(f"Unparseable number {repr(value)}")
+        return parsed_number
 
 @message
 class OneSwitch(ValueMessageBase):
     _value: constants.SwitchState
 
-    def set_from_text(self, value):
-        if value is None:
-            self._value = None
-            return
-        self._value = constants.parse_string_into_enum(value, constants.SwitchState)
+    @staticmethod
+    def value_from_text(value):
+        return constants.parse_string_into_enum(value, constants.SwitchState)
 
 @message
 class OneLight(ValueMessageBase):
     _value: constants.PropertyState
 
-    def set_from_text(self, value):
-        if value is None:
-            self._value = None
-            return
-        self._value = constants.parse_string_into_enum(value, constants.PropertyState)
+    @staticmethod
+    def value_from_text(value):
+        return constants.parse_string_into_enum(value, constants.SwitchState)
+
 
 @message
 class DefValueMessageBase(ValueMessageBase):
@@ -277,16 +281,17 @@ class DefSettableVector(DefVector):
 
 @message
 class DefTextVector(DefSettableVector):
-    pass
+    kind : constants.PropertyKind = constants.PropertyKind.TEXT
 
 
 @message
 class DefNumberVector(DefSettableVector):
-    pass
+    kind : constants.PropertyKind = constants.PropertyKind.NUMBER
 
 @message
 class DefSwitchVector(DefSettableVector):
     rule: constants.SwitchRule
+    kind : constants.PropertyKind = constants.PropertyKind.SWITCH
 
     def apply_update(self, message):
         did_change = super().apply_update(message)
@@ -297,7 +302,7 @@ class DefSwitchVector(DefSettableVector):
 
 @message
 class DefLightVector(DefVector):
-    pass
+    kind : constants.PropertyKind = constants.PropertyKind.LIGHT
 
 # Updated property values from device
 
@@ -392,6 +397,25 @@ IndiMessage = Union[
     GetProperties,
     NewTextVector,
     NewNumberVector,
+    NewSwitchVector,
+]
+IndiNumberProperty = Union[
+    DefNumberVector,
+    SetNumberVector,
+    NewNumberVector,
+]
+IndiTextProperty = Union[
+    DefTextVector,
+    SetTextVector,
+    NewTextVector,
+]
+IndiLightProperty = Union[
+    DefLightVector,
+    SetLightVector,
+]
+IndiSwitchProperty = Union[
+    DefSwitchVector,
+    SetSwitchVector,
     NewSwitchVector,
 ]
 IndiTopLevelMessage = Union[
