@@ -219,7 +219,7 @@ class IndiClient:
                     value = prop[element_name].value_from_text(value)
                 except Exception:
                     pass  # if a proper enum value is passed in, it's not an error, but that won't go through value_from_text.
-                msg = prop.make_update(**{element_name: value})
+                msg = prop.make_new_property(**{element_name: value})
                 self.connection.send(msg)
             else:
                 return prop

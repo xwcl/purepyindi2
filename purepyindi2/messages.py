@@ -1,4 +1,4 @@
-from typing import Optional, Union, get_args
+from typing import Optional, Union, get_args, ClassVar
 from xml.etree import ElementTree as Etree
 from functools import partial
 import datetime
@@ -96,6 +96,22 @@ class ValueMessageBase(MessageBase):
     @staticmethod
     def value_from_text(value):
         return value
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, new_value):
+        try:
+            self.set_from_text(new_value)
+        except Exception as e:
+            if self.validate(new_value):
+                self._value = new_value
+            else:
+                raise RuntimeError(f"Couldn't interpret {new_value=} as text or validated value, original exception {e=}")
+
+
 
     def set_from_text(self, value):
         if value is None:
@@ -209,7 +225,7 @@ class PropertyMessageBase(MessageBase):
 
     def __contains__(self, key):
         return key in self._elements
-    
+
     def __getitem__(self, key):
         try:
             return self._elements[key]._value
@@ -281,15 +297,18 @@ class DefSettableVector(DefVector):
 
 @message
 class DefTextVector(DefSettableVector):
+    ELEMENT_CLASS : ClassVar = DefText
     kind : constants.PropertyKind = constants.PropertyKind.TEXT
 
 
 @message
 class DefNumberVector(DefSettableVector):
+    ELEMENT_CLASS : ClassVar = DefNumber
     kind : constants.PropertyKind = constants.PropertyKind.NUMBER
 
 @message
 class DefSwitchVector(DefSettableVector):
+    ELEMENT_CLASS : ClassVar = DefSwitch
     rule: constants.SwitchRule
     kind : constants.PropertyKind = constants.PropertyKind.SWITCH
 
@@ -302,6 +321,7 @@ class DefSwitchVector(DefSettableVector):
 
 @message
 class DefLightVector(DefVector):
+    ELEMENT_CLASS : ClassVar = DefLight
     kind : constants.PropertyKind = constants.PropertyKind.LIGHT
 
 # Updated property values from device
@@ -318,21 +338,25 @@ class SetVector(DefSetMessageBase):
 
 @message
 class SetTextVector(SetVector):
+    ELEMENT_CLASS : ClassVar = OneText
     _elements: dict[str,OneText] = dataclasses.field(default_factory=dict)
 
 
 @message
 class SetNumberVector(SetVector):
+    ELEMENT_CLASS : ClassVar = OneNumber
     _elements: dict[str,OneNumber] = dataclasses.field(default_factory=dict)
 
 
 @message
 class SetSwitchVector(SetVector):
+    ELEMENT_CLASS : ClassVar = OneSwitch
     _elements: dict[str,OneSwitch] = dataclasses.field(default_factory=dict)
 
 
 @message
 class SetLightVector(SetVector):
+    ELEMENT_CLASS : ClassVar = OneLight
     _elements: dict[str,OneLight] = dataclasses.field(default_factory=dict)
 
 

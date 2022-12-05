@@ -20,10 +20,10 @@ class MyDevice(device.XDevice):
 
     def loop(self):
         prop = self.properties['prop1']
-        if prop['elem1'] == 5:
-            prop['elem1'] = 0
+        if prop['elem1'].value == 5:
+            prop['elem1'].value = 0
         else:
-            prop['elem1'] = 5
+            prop['elem1'].value = 5
         self.update_property(prop)
 
 

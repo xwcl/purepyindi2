@@ -20,6 +20,10 @@ class IndiProperty:
     MESSAGE_SET : typing.ClassVar
     ELEMENT_CLASS : typing.ClassVar
 
+    @classmethod
+    def tag(cls):
+        return 'def' + cls.__name__
+
     @staticmethod
     def from_definition(message):
         for cls in (DefTextVector, DefNumberVector, DefSwitchVector, DefLightVector):
@@ -40,10 +44,22 @@ class IndiProperty:
         flds = dataclasses.fields(cls)
         kwargs = {}
         for fld in flds:
+            if fld.name[0] == '_':
+                continue
             kwargs[fld.name] = getattr(self, fld.name)
         return cls(**kwargs)
 
-    def make_update(self, **kwargs) -> typing.Union[IndiNewMessage, IndiSetMessage]:
+    def make_set_property(self) -> IndiSetMessage:
+        msg = self._construct_outbound_message()
+        for element_name in self._elements:
+            elem = self._elements[element_name]
+            value = elem._value
+            if not elem.validate(value):
+                raise ValueError(f"Invalid value {repr(value)} for {element_name} in property {self.name}")
+            msg._elements[element_name] = msg.ELEMENT_CLASS(name=element_name, _value=value)
+        return msg
+
+    def make_new_property(self, **kwargs) -> IndiNewMessage:
         msg = self._construct_outbound_message()
         for element_name in kwargs:
             if element_name not in self._elements:
@@ -58,9 +74,8 @@ class IndiProperty:
             #    - INDI Whitepaper, page 4
             # "You know, it's fine to have our own standard"
             #    - Dr. Jared R. Males, 2019-11-11
-            msg._elements[element_name] = self.ELEMENT_CLASS(name=element_name, _value=value)
-            if self._role is Role.DEVICE:
-                self._elements[element_name]._value = value
+            msg._elements[element_name] = msg.ELEMENT_CLASS(name=element_name, _value=value)
+
         return msg
 
     def __getitem__(self, key):

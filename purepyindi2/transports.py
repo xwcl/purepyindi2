@@ -132,8 +132,8 @@ class IndiTcpConnection(IndiConnection):
             )
             self._reader.start()
             try:
-                self._writer.join()
-                self._reader.join()
+                self._writer.join(BLOCK_TIMEOUT_SEC)
+                self._reader.join(BLOCK_TIMEOUT_SEC)
             except Exception:
                 if not self.reconnect_automatically:
                     self.status = ConnectionStatus.ERROR
@@ -159,7 +159,7 @@ class IndiTcpConnection(IndiConnection):
         if self.status is ConnectionStatus.CONNECTED:
             self.status = ConnectionStatus.STOPPED
             self.dispatch_callbacks(TransportEvent.connection, self.status)
-            self._reconnection_monitor.join()
+            self._reconnection_monitor.join(BLOCK_TIMEOUT_SEC)
             self._writer = None
             self._reader = None
 
@@ -175,7 +175,9 @@ class IndiPipeConnection(IndiConnection):
         while self.status is ConnectionStatus.CONNECTED:
             try:
                 res = self._outbound_queue.get(True, BLOCK_TIMEOUT_SEC)
-                transport.write(res.to_xml_str() + '\n')
+                message_str = res.to_xml_str()
+                log.debug(f"{message_str=}")
+                transport.write(message_str + '\n')
                 transport.flush()
                 self.dispatch_callbacks(TransportEvent.outbound, res)
             except queue.Empty:
@@ -214,8 +216,8 @@ class IndiPipeConnection(IndiConnection):
     def stop(self):
         if self.status is ConnectionStatus.CONNECTED:
             self.status = ConnectionStatus.STOPPED
-            self._writer.join()
-            self._reader.join()
+            self._writer.join(BLOCK_TIMEOUT_SEC)
+            self._reader.join(BLOCK_TIMEOUT_SEC)
 
 def is_fifo(path):
     return stat.S_ISFIFO(os.stat(path).st_mode)
