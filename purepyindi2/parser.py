@@ -177,7 +177,7 @@ class IndiStreamParser:
         ):
             log.debug("Placing update in queue:")
             log.debug(pformat(self.pending_update))
-            self.update_queue.put(self.pending_update)
+            self.update_queue.put_nowait(self.pending_update)
             self.pending_update = None
             log.debug("Cleared pending update")
         else:

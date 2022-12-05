@@ -16,6 +16,7 @@ class MockClient:
         raise RuntimeError(f"Tried to access {name} attribute of {self} before the client connection had started")
 
 class Device:
+    name : str
     status : constants.ConnectionStatus = constants.ConnectionStatus.STOPPED
     sleep_interval_sec : float = 1
     _setup_complete : bool = False  # set True when setup() has run
