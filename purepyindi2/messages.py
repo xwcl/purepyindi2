@@ -59,8 +59,6 @@ _ATTRIBUTE_CONVERTERS = {
     "rule": lambda x: x.value,
 }
 
-IGNORED_ATTRIBUTES = ('kind',)
-
 class MessageBase:
     @classmethod
     def tag(cls):
@@ -71,8 +69,6 @@ class MessageBase:
         this = Etree.Element(self.tag())
         flds = [x.name for x in dataclasses.fields(self) if x.name[0] != "_"]
         for attrname in flds:
-            if attrname in IGNORED_ATTRIBUTES:
-                continue
             attrval = getattr(self, attrname, None)
             if attrval is not None:
                 attr_converter = _ATTRIBUTE_CONVERTERS.get(attrname, str)
