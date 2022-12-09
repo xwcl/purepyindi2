@@ -56,7 +56,10 @@ _ATTRIBUTE_CONVERTERS = {
     "timestamp": format_datetime_as_iso,
     "state": lambda x: x.value,
     "perm": lambda x: x.value,
+    "rule": lambda x: x.value,
 }
+
+IGNORED_ATTRIBUTES = ('kind',)
 
 class MessageBase:
     @classmethod
@@ -68,6 +71,8 @@ class MessageBase:
         this = Etree.Element(self.tag())
         flds = [x.name for x in dataclasses.fields(self) if x.name[0] != "_"]
         for attrname in flds:
+            if attrname in IGNORED_ATTRIBUTES:
+                continue
             attrval = getattr(self, attrname, None)
             if attrval is not None:
                 attr_converter = _ATTRIBUTE_CONVERTERS.get(attrname, str)
@@ -101,6 +106,9 @@ class ValueMessageBase(MessageBase):
     def value(self):
         return self._value
 
+    def validate(self, value) -> bool:
+        raise NotImplementedError("Subclasses must implement validate()")
+
     @value.setter
     def value(self, new_value):
         try:
@@ -109,9 +117,10 @@ class ValueMessageBase(MessageBase):
             if self.validate(new_value):
                 self._value = new_value
             else:
-                raise RuntimeError(f"Couldn't interpret {new_value=} as text or validated value, original exception {e=}")
+                raise RuntimeError(f"Couldn't interpret {new_value=} as text or validated <{self.tag()}> value (original exception: {e})")
 
-
+    def __post_init__(self):
+        self.value = self._value  # pass it through the validating setter
 
     def set_from_text(self, value):
         if value is None:
@@ -134,6 +143,13 @@ class ValueMessageBase(MessageBase):
 class OneText(ValueMessageBase):
     _value: str
 
+    def validate(self, value):
+        try:
+            str(value)
+            return True
+        except Exception:
+            return False
+
 @message
 class OneNumber(ValueMessageBase):
     _value: float
@@ -147,6 +163,9 @@ class OneNumber(ValueMessageBase):
         except TypeError:
             raise ValueError(f"Unparseable number {repr(value)}")
         return parsed_number
+    
+    def validate(self, value) -> bool:
+        return (value >= self.min) and (value <= self.max)
 
 @message
 class OneSwitch(ValueMessageBase):
@@ -156,6 +175,9 @@ class OneSwitch(ValueMessageBase):
     def value_from_text(value):
         return constants.parse_string_into_enum(value, constants.SwitchState)
 
+    def validate(self, value) -> bool:
+        return isinstance(value, constants.SwitchState)
+
 @message
 class OneLight(ValueMessageBase):
     _value: constants.PropertyState
@@ -164,13 +186,14 @@ class OneLight(ValueMessageBase):
     def value_from_text(value):
         return constants.parse_string_into_enum(value, constants.SwitchState)
 
+    def validate(self, value) -> bool:
+        return isinstance(value, constants.PropertyState)
+
 
 @message
 class DefValueMessageBase(ValueMessageBase):
     label: Optional[str] = None
 
-    def validate(self, value) -> bool:
-        return True
 
 @message
 class DefText(DefValueMessageBase, OneText):
@@ -183,22 +206,15 @@ class DefNumber(DefValueMessageBase, OneNumber):
     max: float
     step: float
 
-    def validate(self, value) -> bool:
-        return (value >= self.min) and (value <= self.max)
 
 @message
 class DefSwitch(DefValueMessageBase, OneSwitch):
     _value: constants.SwitchState
 
-    def validate(self, value) -> bool:
-        return value in constants.SwitchState
 
 @message
 class DefLight(DefValueMessageBase, OneLight):
     _value: constants.PropertyState
-
-    def validate(self, value) -> bool:
-        return value in constants.PropertyState
 
 IndiDefElementMessage = Union[DefText, DefNumber, DefSwitch, DefLight]
 
