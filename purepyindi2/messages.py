@@ -314,19 +314,19 @@ class DefSettableVector(DefVector):
 @message
 class DefTextVector(DefSettableVector):
     ELEMENT_CLASS : ClassVar = DefText
-    kind : constants.PropertyKind = constants.PropertyKind.TEXT
+    _kind : constants.PropertyKind = constants.PropertyKind.TEXT
 
 
 @message
 class DefNumberVector(DefSettableVector):
     ELEMENT_CLASS : ClassVar = DefNumber
-    kind : constants.PropertyKind = constants.PropertyKind.NUMBER
+    _kind : constants.PropertyKind = constants.PropertyKind.NUMBER
 
 @message
 class DefSwitchVector(DefSettableVector):
     ELEMENT_CLASS : ClassVar = DefSwitch
     rule: constants.SwitchRule
-    kind : constants.PropertyKind = constants.PropertyKind.SWITCH
+    _kind : constants.PropertyKind = constants.PropertyKind.SWITCH
 
     def apply_update(self, message):
         did_change = super().apply_update(message)
@@ -338,7 +338,7 @@ class DefSwitchVector(DefSettableVector):
 @message
 class DefLightVector(DefVector):
     ELEMENT_CLASS : ClassVar = DefLight
-    kind : constants.PropertyKind = constants.PropertyKind.LIGHT
+    _kind : constants.PropertyKind = constants.PropertyKind.LIGHT
 
 # Updated property values from device
 

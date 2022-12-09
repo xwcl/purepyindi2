@@ -38,16 +38,15 @@ class IndiClient:
         properties (dataclasses, keyed by name). Can be serialized by
         a dataclass- and enum-aware serializer.
         '''
-        out = {'devices': {}}
-        devices = out['devices']
+        devices = {}
         for devname in self._devices:
             devices[devname] = {}
             thisdev = devices[devname]
             for propname in self._devices[devname]:
-                thisdev[propname] = dataclasses.asdict(self._devices[devname][propname])
+                thisdev[propname] = self._devices[devname][propname].to_serializable()
                 # _role is always client in this context, save some bytes
                 del thisdev[propname]['_role']
-        return out
+        return {'devices': devices}
 
     def to_json(self, **kwargs):
         '''Serialize devices and properties with orjson, passing
@@ -159,8 +158,8 @@ class IndiClient:
             else:
                 device = self._devices[message.device]
                 for propname in device:
-                    if message.name is None or property_name == message.name:
-                        del device[property_name]
+                    if message.name is None or propname == message.name:
+                        del device[propname]
                         log.debug(f"Deleted matching {property_name} property on device {message.device}")
         elif isinstance(message, (messages.IndiDefMessage, messages.IndiSetMessage)):
             device_name = message.device

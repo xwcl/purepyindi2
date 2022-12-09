@@ -36,6 +36,9 @@ class IndiProperty:
                 return newcls(**kwargs)
         raise TypeError("Can only construct IndiProperty subclasses given Def*Vector instances")
 
+    def to_serializable(self):
+        return dataclasses.asdict(self)
+
     def _construct_outbound_message(self) -> typing.Union[IndiNewMessage, IndiSetMessage]:
         if self._role is Role.CLIENT:
             cls = self.MESSAGE_NEW
