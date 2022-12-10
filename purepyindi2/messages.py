@@ -398,16 +398,19 @@ class GetProperties(MessageBase):
 
 @message
 class NewTextVector(PropertyMessageBase):
+    ELEMENT_CLASS : ClassVar = OneText
     _elements: dict[str,OneText] = dataclasses.field(default_factory=dict)
 
 
 @message
 class NewNumberVector(PropertyMessageBase):
+    ELEMENT_CLASS : ClassVar = OneNumber
     _elements: dict[str,OneNumber] = dataclasses.field(default_factory=dict)
 
 
 @message
 class NewSwitchVector(PropertyMessageBase):
+    ELEMENT_CLASS : ClassVar = OneSwitch
     _elements: dict[str,OneSwitch] = dataclasses.field(default_factory=dict)
 
 

@@ -161,10 +161,14 @@ class IndiClient:
                 for k in devices:
                     del self._devices[k]
             else:
-                device = self._devices[message.device]
-                for propname in device:
+                propnames = tuple(self._devices[message.device].keys())
+                for propname in propnames:
                     if message.name is None or propname == message.name:
-                        del device[propname]
+                        try:
+                            del self._devices[message.device][propname]
+                        except KeyError:
+                            # if it was somehow deleted while we were iterating we could get a KeyError, but we were trying to delete anyway.
+                            pass
                         log.debug(f"Deleted matching {propname} property on device {message.device}")
         elif isinstance(message, (messages.IndiDefMessage, messages.IndiSetMessage)):
             device_name = message.device
