@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 
 class IndiConnection:
     QUEUE_CLASS = queue.Queue
+    LOCK_CLASS = threading.Lock
 
     def __init__(self):
         self.status = ConnectionStatus.STARTING
@@ -40,19 +41,23 @@ class IndiConnection:
         self._parser = IndiStreamParser(self._inbound_queue)
         self._writer = self._reader = None
         self.event_callbacks = defaultdict(set)
+        self.callbacks_set_lock = self.LOCK_CLASS()
 
     def add_callback(self, event: TransportEvent, callback):
-        self.event_callbacks[event].add(callback)
+        with self.callbacks_set_lock:
+            self.event_callbacks[event].add(callback)
 
     def remove_callback(self, event: TransportEvent, callback):
-        self.event_callbacks[event].remove(callback)
+        with self.callbacks_set_lock:
+            self.event_callbacks[event].remove(callback)
 
     def dispatch_callbacks(self, event: TransportEvent, payload):
-        for callback in self.event_callbacks[event]:
-            try:
-                callback(payload)
-            except Exception as e:
-                log.exception(f"Caught exception in {event.name} callback {callback}")
+        with self.callbacks_set_lock:
+            for callback in self.event_callbacks[event]:
+                try:
+                    callback(payload)
+                except Exception as e:
+                    log.exception(f"Caught exception in {event.name} callback {callback}")
 
     def send(self, indi_action):
         self._outbound_queue.put_nowait(indi_action)
@@ -257,6 +262,7 @@ class IndiFifoConnection(IndiPipeConnection):
 
 class AsyncIndiTcpConnection(IndiTcpConnection):
     QUEUE_CLASS = asyncio.Queue
+    LOCK_CLASS = asyncio.Lock
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.async_event_callbacks = defaultdict(set)
