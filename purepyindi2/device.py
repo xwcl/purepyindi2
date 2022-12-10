@@ -65,12 +65,15 @@ class Device:
             time.sleep(0.1)
         if isinstance(message, messages.GetProperties):
             log.debug("Get properties got")
-            if message.device == self.name:
+            if message.device is None:
+                log.debug("Sending all properties (catch-all getProperties)")
+                self.send_all_properties()
+            elif message.device == self.name:
                 if message.name is not None:
                     if message.name in self.properties:
                         self.connection.send(self.properties[message.name])
                 else:
-                    log.debug("Sending all properties")
+                    log.debug(f"Sending all properties (for device {message.device})")
                     self.send_all_properties()
         elif isinstance(message, messages.IndiNewMessage):
             if message.device == self.name and message.name in self.properties:
