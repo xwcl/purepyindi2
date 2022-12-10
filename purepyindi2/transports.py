@@ -32,7 +32,6 @@ log = logging.getLogger(__name__)
 
 class IndiConnection:
     QUEUE_CLASS = queue.Queue
-    LOCK_CLASS = threading.Lock
 
     def __init__(self):
         self.status = ConnectionStatus.STARTING
@@ -41,7 +40,7 @@ class IndiConnection:
         self._parser = IndiStreamParser(self._inbound_queue)
         self._writer = self._reader = None
         self.event_callbacks = defaultdict(set)
-        self.callbacks_set_lock = self.LOCK_CLASS()
+        self.callbacks_set_lock = threading.Lock()
 
     def add_callback(self, event: TransportEvent, callback):
         with self.callbacks_set_lock:
@@ -262,23 +261,26 @@ class IndiFifoConnection(IndiPipeConnection):
 
 class AsyncIndiTcpConnection(IndiTcpConnection):
     QUEUE_CLASS = asyncio.Queue
-    LOCK_CLASS = asyncio.Lock
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.async_event_callbacks = defaultdict(set)
+        self.async_callbacks_set_lock = asyncio.Lock()
 
-    def add_async_callback(self, event: TransportEvent, callback):
-        self.async_event_callbacks[event].add(callback)
+    async def add_async_callback(self, event: TransportEvent, callback):
+        async with self.async_callbacks_set_lock:
+            self.async_event_callbacks[event].add(callback)
 
-    def remove_async_callback(self, event: TransportEvent, callback):
-        self.async_event_callbacks[event].remove(callback)
+    async def remove_async_callback(self, event: TransportEvent, callback):
+        async with self.async_callbacks_set_lock:
+            self.async_event_callbacks[event].remove(callback)
 
     async def dispatch_async_callbacks(self, event: TransportEvent, payload):
-        for callback in self.async_event_callbacks[event]:
-            try:
-                await callback(payload)
-            except Exception as e:
-                log.exception(f"Caught exception in {event.name} callback {callback}")
+        async with self.async_callbacks_set_lock:
+            for callback in self.async_event_callbacks[event]:
+                try:
+                    await callback(payload)
+                except Exception as e:
+                    log.exception(f"Caught exception in {event.name} callback {callback}")
 
     def start(self):
         log.debug("To start, schedule an async task for AsyncINDIClient.run")
