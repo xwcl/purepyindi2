@@ -146,11 +146,6 @@ class IndiClient:
         log.debug(f"Unregistered callback {cb=} for {device_name=} {property_name=}")
 
     def handle_message(self, message):
-        try:
-            if message.name == 'purepyindi_example':
-                print(message)
-        except Exception:
-            pass
         if not isinstance(message, messages.IndiDefSetDelMessage):
             return
         self.dispatch_callbacks(message)
