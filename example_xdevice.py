@@ -15,6 +15,7 @@ class ExampleDevice(device.XDevice):
         sv = properties.SwitchVector(
             name="obs_on",
             rule=constants.SwitchRule.ONE_OF_MANY,
+            perm=constants.PropertyPerm.READ_WRITE,
         )
         sv.add_element(DefSwitch(name="toggle", _value=constants.SwitchState.OFF))
         self.add_property(sv, callback=self.handle_toggle)
