@@ -137,7 +137,7 @@ class IndiStreamParser:
             self.pending_update = DelProperty(
                 device=tag_attributes.get('device'),
                 name=tag_attributes.get('name'),
-                timestamp=parse_optional_timestamp(tag_attributes['timestamp']),
+                timestamp=parse_optional_timestamp(tag_attributes.get('timestamp')),
                 message=tag_attributes.get('message')
             )
         elif tag_name == GetProperties.tag():
@@ -145,6 +145,12 @@ class IndiStreamParser:
                 device=tag_attributes.get('device'),
                 name=tag_attributes.get('name'),
                 version=tag_attributes.get('version'),
+            )
+        elif tag_name == Message.tag():
+            self.pending_update = Message(
+                device=tag_attributes.get('device'),
+                timestamp=parse_optional_timestamp(tag_attributes.get('timestamp')),
+                message=tag_attributes.get('message'),
             )
         elif tag_name == "indi":
             # poked into parser by us at init so it treats the whole
@@ -171,6 +177,7 @@ class IndiStreamParser:
         elif (
             tag_name == GetProperties.tag() or
             tag_name == DelProperty.tag() or
+            tag_name == Message.tag() or
             tag_name in self.PROPERTY_DEF_LOOKUP or 
             tag_name in self.PROPERTY_SET_LOOKUP or 
             tag_name in self.PROPERTY_NEW_LOOKUP
