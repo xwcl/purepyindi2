@@ -1,5 +1,6 @@
 from typing import Optional, Union, get_args, ClassVar
 from xml.etree import ElementTree as Etree
+import warnings
 from functools import partial
 import datetime
 from . import constants
@@ -161,7 +162,13 @@ class OneNumber(ValueMessageBase):
         return parsed_number
     
     def validate(self, value) -> bool:
-        return (value >= self.min) and (value <= self.max)
+        if value < self.min or value > self.max:
+            warnings.warn(f"Value {value} isn't {self.min} <= value <= {self.max} (bounds from property definition)")
+        try:
+            value = float(value)
+            return True
+        except Exception:
+            return False
 
 @message
 class OneSwitch(ValueMessageBase):
