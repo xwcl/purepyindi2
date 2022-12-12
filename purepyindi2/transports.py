@@ -287,6 +287,7 @@ class AsyncIndiTcpConnection(IndiTcpConnection):
 
     async def run(self, reconnect_automatically=False):
         while self.status is not ConnectionStatus.STOPPED:
+            log.info(f"Starting connection to {self.host}:{self.port}")
             try:
                 reader_handle, writer_handle = await asyncio.open_connection(
                     self.host,
@@ -305,24 +306,26 @@ class AsyncIndiTcpConnection(IndiTcpConnection):
                     )
                 except asyncio.CancelledError:
                     continue
-            except ConnectionError as e:
-                log.warn(f"Failed to connect: {repr(e)}")
-                if reconnect_automatically:
-                    log.warn(f"Retrying in {RECONNECTION_DELAY_SEC} seconds")
             except Exception as e:
-                log.warn(f"Swallowed exception: {type(e)}, {e}")
-                raise
+                log.exception(f"Exception in {self.__class__.__name__}")
+                if reconnect_automatically:
+                    log.info(f"Retrying in {RECONNECTION_DELAY_SEC} seconds")
+                    self.status = ConnectionStatus.RECONNECTING
+                    log.info("Connection state changed to RECONNECTING")
+                else:
+                    self.status = ConnectionStatus.ERROR
+                    log.info("Connection state changed to ERROR")
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                log.debug("Dispatched callbacks for connection state change")
+                await self.dispatch_async_callbacks(TransportEvent.connection, self.status)
+                log.debug("Dispatched async callbacks for connection state change")
+                if reconnect_automatically:
+                    log.debug(f"Going to sleep for {RECONNECTION_DELAY_SEC} sec")
+                    await asyncio.sleep(RECONNECTION_DELAY_SEC)
+                else:
+                    raise ConnectionError(f"Got disconnected from {self.host}:{self.port}, not attempting reconnection (Original exception was: {type(e)}, {e})")
             finally:
                 self._cancel_tasks()
-            if reconnect_automatically:
-                self.status = ConnectionStatus.RECONNECTING
-                self.dispatch_callbacks(TransportEvent.connection, self.status)
-                await self.dispatch_async_callbacks(TransportEvent.connection, self.status)
-                await asyncio.sleep(RECONNECTION_DELAY_SEC)
-            else:
-                self.dispatch_callbacks(TransportEvent.connection, self.status)
-                await self.dispatch_async_callbacks(TransportEvent.connection, self.status)
-                raise ConnectionError(f"Got disconnected from {self.host}:{self.port}, not attempting reconnection")
     def _cancel_tasks(self):
         if self._reader is not None:
             self._reader.cancel()
