@@ -1,6 +1,7 @@
 import socket
+from functools import partial
 import typing
-from .constants import ALL, TransportEvent
+from .constants import ALL, TransportEvent, ConnectionStatus
 from .transports import IndiTcpServerListener, IndiTcpClientConnection, IndiTcpServerConnection
 from .client import IndiClient
 from . import messages
@@ -47,7 +48,7 @@ class IndiServer:
         visible: typing.Union[list[str], ALL, None] = ALL,
     ):
         self.listener = IndiTcpServerListener((bind_host, bind_port), self.accept_connection)
-        self.clients = []
+        self.clients = {}
         self.remote_server_clients = {}
         for remote_host, remote_port in remote_servers:
             c = IndiTcpClientConnection(host=remote_host, port=remote_port)
@@ -64,9 +65,11 @@ class IndiServer:
         conn = IndiTcpServerConnection(host=client_host, port=client_port)
         conn.start(client_socket)
         self.clients[(client_host, client_port)] = conn
+        conn.add_callback(TransportEvent.connection, partial(self.client_status, client_key=(client_host, client_port)))
 
-    def client_disconnect(self, client_key):
-        del self.clients[client_key]
+    def client_status(self, event : TransportEvent, status : ConnectionStatus, client_key):
+        if status is not ConnectionStatus.CONNECTED:
+            del self.clients[client_key]
 
     def broadcast(self, indi_action):
         # TODO rewrite to r/o, filter non-visible
