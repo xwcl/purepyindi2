@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Union
 
 __all__ = (
     'ConnectionStatus',
@@ -6,6 +7,8 @@ __all__ = (
     'PropertyPerm',
     'SwitchState',
     'SwitchRule',
+    'AnyIndiValue',
+    'parse_string_into_any_indi_value',
     'parse_string_into_enum',
     'INDI_PROTOCOL_VERSION_STRING',
     'ISO_TIMESTAMP_FORMAT',
@@ -35,6 +38,24 @@ def parse_string_into_enum(string, enumtype):
         if string == entry.value:
             return entry
     raise ValueError(f"No enum instance in {enumtype} for string {repr(string)}")
+
+def parse_string_into_any_indi_value(string):
+    '''Tries to turn `string` into a PropertyState (light), SwitchState, or floating-point number;
+    falling back to returning the input string.
+    '''
+    try:
+        return parse_string_into_enum(string, PropertyState)
+    except ValueError:
+        pass
+    try:
+        return parse_string_into_enum(string, SwitchState)
+    except ValueError:
+        pass
+    try:
+        return float(string)
+    except ValueError:
+        pass
+    return string
 
 class Role(Enum):
     DEVICE = 'device'
@@ -81,3 +102,5 @@ class SwitchRule(Enum):
     ONE_OF_MANY = 'OneOfMany'
     AT_MOST_ONE = 'AtMostOne'
     ANY_OF_MANY = 'AnyOfMany'
+
+AnyIndiValue = Union[PropertyState, SwitchState, float, int, str]
