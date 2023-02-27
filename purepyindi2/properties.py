@@ -81,13 +81,6 @@ class IndiProperty:
 
         return msg
 
-    def __getitem__(self, key):
-        try:
-            elem = self._elements[key]
-        except KeyError:
-            raise NoSuchElementException(f"No element {repr(key)} in {self}")
-        return elem
-
     def __setitem__(self, key, value):
         self._elements[key].validate(value)
         self._elements[key]._value = value
