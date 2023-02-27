@@ -32,9 +32,9 @@ log = logging.getLogger(__name__)
 
 class IndiConnection:
     QUEUE_CLASS = queue.Queue
+    status : ConnectionStatus = ConnectionStatus.NOT_CONFIGURED
 
     def __init__(self):
-        self.status = ConnectionStatus.STARTING
         self._outbound_queue = self.QUEUE_CLASS()
         self._inbound_queue = self.QUEUE_CLASS()
         self._parser = IndiStreamParser(self._inbound_queue)
@@ -74,12 +74,8 @@ class IndiConnection:
         raise NotImplementedError()
 
 class IndiTcpConnection(IndiConnection):
-    reconnect_automatically : bool = True
-    def __init__(self, *args, host=DEFAULT_HOST, port=DEFAULT_PORT, reconnect_automatically=None, **kwargs):
-        if reconnect_automatically is not None:
-            self.reconnect_automatically = reconnect_automatically
+    def __init__(self, *args, host=DEFAULT_HOST, port=DEFAULT_PORT, **kwargs):
         self.host, self.port = host, port
-        self._monitor = None
         super().__init__(*args, **kwargs)
 
     def _handle_outbound(self, transport : socket.socket):
@@ -91,20 +87,31 @@ class IndiTcpConnection(IndiConnection):
                 transport.sendall(data + b'\n')
                 log.debug(f"Sent: {data}")
                 self.dispatch_callbacks(TransportEvent.outbound, msg)
+            except socket.error:
+                self.status = ConnectionStatus.ERROR
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                break
             except queue.Empty:
                 pass
-        transport.shutdown(socket.SHUT_RD)
+        transport.shutdown(socket.SHUT_WR)
 
     def _handle_inbound(self, transport):
         log.debug("Inbound handler started")
-        while not self.status == ConnectionStatus.STOPPED:
+        while self.status is ConnectionStatus.CONNECTED:
             try:
                 data = transport.recv(CHUNK_MAX_READ_SIZE)
             except socket.timeout:
                 continue
-            except socket.error:
-                self.status = ConnectionStatus.RECONNECTING
-                return
+            except socket.error as e:
+                log.exception("Socket error caught, disconnected")
+                self.status = ConnectionStatus.ERROR
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                break
+            if data == b'':
+                self.status = ConnectionStatus.ERROR
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                log.debug("Got EOF from server")
+                raise ConnectionError("Got EOF from server")
             self._parser.parse(data)
             try:
                 while True:
@@ -114,44 +121,67 @@ class IndiTcpConnection(IndiConnection):
                 pass
         transport.shutdown(socket.SHUT_RD)
 
-    def _reconnection_monitor(self):
-        if self.status is not ConnectionStatus.STOPPED:
-            self._socket.connect((self.host, self.port))
-            self._socket.settimeout(BLOCK_TIMEOUT_SEC)
-            self.status = ConnectionStatus.CONNECTED
-            log.debug(f"Connected to {self.host}:{self.port}")
-            self.dispatch_callbacks(TransportEvent.connection, self.status)
-            self._writer = threading.Thread(
+    def _start_reader_writer_threads(self):
+        self._writer = threading.Thread(
                 target=self._handle_outbound,
-                name=f'{self.__class__.__name__}-sender',
-                daemon=True,
-                args=(self._socket,)
-            )
-            self._writer.start()
-            self._reader = threading.Thread(
-                target=self._handle_inbound,
-                name=f'{self.__class__.__name__}-receiver',
-                daemon=True,
-                args=(self._socket,)
-            )
-            self._reader.start()
+            name=f'{self.__class__.__name__}-sender',
+            daemon=True,
+            args=(self._socket,)
+        )
+        self._writer.start()
+        self._reader = threading.Thread(
+            target=self._handle_inbound,
+            name=f'{self.__class__.__name__}-receiver',
+            daemon=True,
+            args=(self._socket,)
+        )
+        self._reader.start()
+
+class IndiTcpClientConnection(IndiTcpConnection):
+    """Connection from client to server with optional reconnection logic"""
+    reconnect_automatically : bool = True
+    def __init__(self, *args, reconnect_automatically=None, **kwargs):
+        self._monitor = None
+        if reconnect_automatically is not None:
+            self.reconnect_automatically = reconnect_automatically
+        super().__init__(*args, **kwargs)
+    def _reconnection_monitor(self):
+        while self.status is not ConnectionStatus.STOPPED:
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                self._writer.join(BLOCK_TIMEOUT_SEC)
-                self._reader.join(BLOCK_TIMEOUT_SEC)
-            except Exception:
-                if not self.reconnect_automatically:
+                self._socket.connect((self.host, self.port))
+                self._socket.settimeout(BLOCK_TIMEOUT_SEC)
+                self.status = ConnectionStatus.CONNECTED
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                log.debug(f"Connected to {self.host}:{self.port}")
+            except ConnectionError as e:
+                self._socket.close()
+                log.exception(f"Failed to connect to {self.host}:{self.port}")
+                if self.reconnect_automatically:
+                    log.info(f"Retrying in {RECONNECTION_DELAY_SEC} sec...")
+                    time.sleep(RECONNECTION_DELAY_SEC)
+                    continue
+                else:
                     self.status = ConnectionStatus.ERROR
                     self.dispatch_callbacks(TransportEvent.connection, self.status)
                     raise
-                else:
-                    self.status = ConnectionStatus.RECONNECTING
-                    self.dispatch_callbacks(TransportEvent.connection, self.status)
-                    log.exception(f"Connection failed. Reconnecting to {self.host}:{self.port} in {RECONNECTION_DELAY_SEC} sec...")
-                    time.sleep(RECONNECTION_DELAY_SEC)
+            
+            self._start_reader_writer_threads()
+            self._writer.join()
+            self._reader.join()
+
+            if not self.reconnect_automatically:
+                self.status = ConnectionStatus.ERROR
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                raise ConnectionError("Connection failed and reconnect_automatically is False")
+            else:
+                self.status = ConnectionStatus.CONNECTING
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                log.error(f"Connection failed. Reconnecting to {self.host}:{self.port} in {RECONNECTION_DELAY_SEC} sec...")
+                time.sleep(RECONNECTION_DELAY_SEC)
 
     def start(self):
         if self.status is not ConnectionStatus.CONNECTED:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._monitor = threading.Thread(
                 target=self._reconnection_monitor,
                 name=f'{self.__class__.__name__}-monitor',
@@ -167,6 +197,43 @@ class IndiTcpConnection(IndiConnection):
             self._writer = None
             self._reader = None
 
+class IndiTcpServerConnection(IndiTcpConnection):
+    '''Connection used by a server to communicate with a single client'''
+    def start(self, client_socket):
+        if self.status is not ConnectionStatus.CONNECTED:
+            self._socket = client_socket
+            self._start_reader_writer_threads()
+        else:
+            raise RuntimeError("start() called twice without stop()")
+    def stop(self):
+        if self.status is ConnectionStatus.CONNECTED:
+            self.status = ConnectionStatus.STOPPED
+            self.dispatch_callbacks(TransportEvent.connection, self.status)
+            self._writer.join(BLOCK_TIMEOUT_SEC)
+            self._writer = None
+            self._reader.join(BLOCK_TIMEOUT_SEC)
+            self._reader = None
+
+class IndiTcpServerListener:
+    '''Listener that binds a socket to accept incoming connections'''
+    status : ConnectionStatus = ConnectionStatus.NOT_CONFIGURED
+    listening_socket : socket.socket
+    clients : dict[tuple[str, int], IndiTcpServerConnection]
+    bind_to : tuple[str, int]
+    def __init__(self, bind_to, accept_socket_callback):
+        self.accept_socket_callback = accept_socket_callback
+        self.bind_to = bind_to
+        self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.clients = {}
+
+    def start(self):
+        self.status = ConnectionStatus.CONNECTED
+        self.listening_socket.bind(self.bind_to)
+        while self.status is not ConnectionStatus.STOPPED:
+            self.listening_socket.listen()
+            client_socket, (client_host, client_port) = self.listening_socket.accept()
+            self.accept_socket_callback(client_socket, client_host, client_port)
 
 class IndiPipeConnection(IndiConnection):
     def __init__(self, *args, input_pipe=None, output_pipe=None, **kwargs):
@@ -310,7 +377,7 @@ class AsyncIndiTcpConnection(IndiTcpConnection):
                 log.exception(f"Exception in {self.__class__.__name__}")
                 if reconnect_automatically:
                     log.info(f"Retrying in {RECONNECTION_DELAY_SEC} seconds")
-                    self.status = ConnectionStatus.RECONNECTING
+                    self.status = ConnectionStatus.CONNECTING
                     log.info("Connection state changed to RECONNECTING")
                 else:
                     self.status = ConnectionStatus.ERROR

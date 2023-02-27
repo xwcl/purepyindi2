@@ -390,7 +390,7 @@ class Message(MessageBase):
 
 @message
 class DelProperty(MessageBase):
-    device: Optional[str] = None
+    device: str
     name: Optional[str] = None
     timestamp: Optional[datetime.datetime] = None
     message: Optional[str] = None

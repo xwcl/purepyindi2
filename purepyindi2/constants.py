@@ -67,9 +67,8 @@ class TransportEvent(Enum):
     outbound = 'outbound'
 
 class ConnectionStatus(Enum):
-    STARTING = 'starting'
+    CONNECTING = 'connecting'
     CONNECTED = 'connected'
-    RECONNECTING = 'reconnecting'
     STOPPED = 'stopped'
     ERROR = 'error'
     NOT_CONFIGURED = 'not configured'

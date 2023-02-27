@@ -17,7 +17,6 @@ class MockClient:
 
 class Device:
     name : str
-    status : constants.ConnectionStatus = constants.ConnectionStatus.STOPPED
     sleep_interval_sec : float = 1
     _setup_complete : bool = False  # set True when setup() has run
     client : typing.Optional[IndiClient] = MockClient()

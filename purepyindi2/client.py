@@ -113,7 +113,7 @@ class IndiClient:
         # reset warning in case this is not the first time we're connecting
         self.last_get_properties_scope = None
         if self.connection is None:
-            self.connection = transports.IndiTcpConnection(host=host, port=port)
+            self.connection = transports.IndiTcpClientConnection(host=host, port=port)
         self.connection.add_callback(constants.TransportEvent.inbound, self.handle_message)
         self.connection.start()
 
