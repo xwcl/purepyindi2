@@ -83,8 +83,6 @@ class Device:
                         log.debug(f"Fired callback {cb=} with {message=}")
                     except Exception:
                         log.exception(f"Caught exception from property {message.name} callback {cb}")
-                        import sys
-                        sys.exit(1)
 
     def setup(self):
         pass
