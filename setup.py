@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 from os import path
 
 HERE = path.abspath(path.dirname(__file__))
@@ -27,7 +27,7 @@ setup(
     version=VERSION,
     long_description=LONG_DESCRIPTION,
     long_description_content_type='text/markdown',
-    packages=[PROJECT],
+    packages=find_packages(),
     python_requires='>=3.9, <4',
     install_requires=[],
     package_data={  # Optional
