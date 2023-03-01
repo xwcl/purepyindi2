@@ -58,8 +58,8 @@ class IndiServer:
             self.remote_server_clients[(remote_host, remote_port)] = c
             c.add_callback(TransportEvent.inbound, self.broadcast)
 
-    def start(self):
-        self.listener.start()
+    def run(self):
+        self.listener.run()
 
     def accept_connection(self, client_socket, client_host, client_port):
         conn = IndiTcpServerConnection(host=client_host, port=client_port)

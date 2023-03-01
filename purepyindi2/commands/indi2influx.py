@@ -22,7 +22,7 @@ def relay(message : messages.IndiMessage, write_api: WriteApi, bucket: str):
         return
     device_name, prop_name = message.device, message.name
     for element_name, elem in message.elements():
-        metric_value = elem.get()
+        metric_value = elem.value
         if metric_value in (None, float('inf'), float('-inf')):
             continue
         if message.timestamp is not None:
