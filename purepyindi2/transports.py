@@ -82,17 +82,18 @@ class IndiTcpConnection(IndiConnection):
         log.debug("Outbound handler started")
         while self.status is ConnectionStatus.CONNECTED:
             try:
-                msg = self._outbound_queue.get(True, BLOCK_TIMEOUT_SEC)
-                data = msg.to_xml_bytes()
-                transport.sendall(data + b'\n')
-                log.debug(f"Sent: {data}")
-                self.dispatch_callbacks(TransportEvent.outbound, msg)
+                while True:
+                    msg = self._outbound_queue.get(True, BLOCK_TIMEOUT_SEC)
+                    data = msg.to_xml_bytes()
+                    transport.sendall(data + b'\n')
+                    log.debug(f"Sent: {data}")
+                    self.dispatch_callbacks(TransportEvent.outbound, msg)
+            except queue.Empty:
+                pass
             except socket.error:
                 self.status = ConnectionStatus.ERROR
                 self.dispatch_callbacks(TransportEvent.connection, self.status)
                 break
-            except queue.Empty:
-                pass
         transport.shutdown(socket.SHUT_WR)
 
     def _handle_inbound(self, transport):
@@ -108,10 +109,10 @@ class IndiTcpConnection(IndiConnection):
                 self.dispatch_callbacks(TransportEvent.connection, self.status)
                 break
             if data == b'':
-                self.status = ConnectionStatus.ERROR
+                self.status = ConnectionStatus.STOPPED
                 self.dispatch_callbacks(TransportEvent.connection, self.status)
                 log.debug("Got EOF from server")
-                raise ConnectionError("Got EOF from server")
+                break
             self._parser.parse(data)
             try:
                 while True:
@@ -202,6 +203,7 @@ class IndiTcpServerConnection(IndiTcpConnection):
     def start(self, client_socket):
         if self.status is not ConnectionStatus.CONNECTED:
             self._socket = client_socket
+            self.status = ConnectionStatus.CONNECTED
             self._start_reader_writer_threads()
         else:
             raise RuntimeError("start() called twice without stop()")
@@ -227,7 +229,7 @@ class IndiTcpServerListener:
         self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.clients = {}
 
-    def start(self):
+    def run(self):
         self.status = ConnectionStatus.CONNECTED
         self.listening_socket.bind(self.bind_to)
         while self.status is not ConnectionStatus.STOPPED:

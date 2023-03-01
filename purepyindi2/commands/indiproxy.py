@@ -13,7 +13,7 @@ def main():
             ('localhost', 7624),
         ]
     )
-    s.start()
+    s.run()
     IPython.embed()
 
 if __name__ == "__main__":
