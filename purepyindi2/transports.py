@@ -86,7 +86,7 @@ class IndiTcpConnection(IndiConnection):
                     msg = self._outbound_queue.get(True, BLOCK_TIMEOUT_SEC)
                     data = msg.to_xml_bytes()
                     transport.sendall(data + b'\n')
-                    log.debug(f"Sent: {data}")
+                    log.debug(f"out: {data}")
                     self.dispatch_callbacks(TransportEvent.outbound, msg)
             except queue.Empty:
                 pass
@@ -101,6 +101,7 @@ class IndiTcpConnection(IndiConnection):
         while self.status is ConnectionStatus.CONNECTED:
             try:
                 data = transport.recv(CHUNK_MAX_READ_SIZE)
+                log.debug(f"in: {data}")
             except socket.timeout:
                 continue
             except socket.error as e:
@@ -249,8 +250,8 @@ class IndiPipeConnection(IndiConnection):
             try:
                 res = self._outbound_queue.get(True, BLOCK_TIMEOUT_SEC)
                 message_str = res.to_xml_str()
-                log.debug(f"{message_str=}")
                 transport.write(message_str + '\n')
+                log.debug(f"out: {repr(message_str)}")
                 transport.flush()
                 self.dispatch_callbacks(TransportEvent.outbound, res)
             except queue.Empty:
@@ -260,6 +261,7 @@ class IndiPipeConnection(IndiConnection):
         log.debug("Inbound handler started")
         while self.status is ConnectionStatus.CONNECTED:
             from_server = transport.readline(CHUNK_MAX_READ_SIZE)
+            log.debug(f"in: {repr(from_server)}")
             self._parser.parse(from_server)
             try:
                 while True:
@@ -407,13 +409,13 @@ class AsyncIndiTcpConnection(IndiTcpConnection):
         while self.status == ConnectionStatus.CONNECTED:
             try:
                 data = await asyncio.wait_for(reader_handle.read(CHUNK_MAX_READ_SIZE), BLOCK_TIMEOUT_SEC)
+                log.debug(f"in: {data}")
             except asyncio.TimeoutError:
                 log.debug(f"No data for {BLOCK_TIMEOUT_SEC} sec")
                 continue
             if data == b'':
                 log.debug("Got EOF from server")
                 raise ConnectionError("Got EOF from server")
-            log.debug(f"Feeding to parser: {repr(data)}")
             self._parser.parse(data)
             while not self._inbound_queue.empty():
                 update = await self._inbound_queue.get()
@@ -428,6 +430,7 @@ class AsyncIndiTcpConnection(IndiTcpConnection):
                 data = message.to_xml_bytes()
                 writer_handle.write(data + b'\n')
                 await writer_handle.drain()
+                log.debug(f"out: {data}")
                 self.dispatch_callbacks(TransportEvent.outbound, message)
                 await self.dispatch_async_callbacks(TransportEvent.outbound, message)
             except asyncio.CancelledError:

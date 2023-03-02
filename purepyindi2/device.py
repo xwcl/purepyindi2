@@ -106,7 +106,7 @@ class Device:
             log.debug("Connection stopped")
   
     def run(self):
-        self.client = client.IndiClient(self.connection)
+        self.client = client.IndiClient()
         self.setup()
         self.send_all_properties()
         self._setup_complete = True
