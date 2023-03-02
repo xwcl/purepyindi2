@@ -116,6 +116,7 @@ class Device:
 
     def run(self):
         self.client = client.IndiClient()
+        self.client.connect()
         self.setup()
         self.send_all_properties()
         self._setup_complete = True
@@ -129,12 +130,12 @@ class Device:
 
 class XDevice(Device):
     prefix_dir : str  = "/opt/MagAOX"
-    logs_dir : str = "log"
+    logs_dir : str = "logs"
     log : logging.Logger
 
     def _init_logs(self, verbose, all_verbose):
         self.log = logging.getLogger(self.name)
-        log_dir = self.prefix + "/" + self.logs_dir + "/" + self.name + "/"
+        log_dir = self.prefix_dir + "/" + self.logs_dir + "/" + self.name + "/"
         os.makedirs(log_dir, exist_ok=True)
         self.log.debug(f"Made (or found) {log_dir=}")
         timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S")
@@ -158,12 +159,12 @@ class XDevice(Device):
         self.log.info(f"Logging to {log_file_path}")
 
     def __init__(self, name, *args, verbose=False, all_verbose=False, **kwargs):
-        self._init_logs()
         fifos_root = self.prefix_dir + "/drivers/fifos"
         super().__init__(name, *args, connection_class=partial(transports.IndiFifoConnection, name=name, fifos_root=fifos_root), **kwargs)
+        self._init_logs(verbose, all_verbose)
 
     def lock_pid_file(self):
-        pid_dir = self.magaox_root + "/sys/{self.name}"
+        pid_dir = self.prefix_dir + f"/sys/{self.name}"
         os.makedirs(pid_dir, exist_ok=True)
         pid_file = pid_dir + "/pid"
         if os.path.exists(pid_file):
@@ -189,15 +190,15 @@ class XDevice(Device):
             fh.write(thisproc.pid)
 
     def main(self):
-        self.lock_pid_file()
+        # self.lock_pid_file()
         super().main()
 
     @classmethod
-    def entrypoint(cls):
+    def console_app(cls):
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument('-n', '--name', help="Device name for INDI")
-        parser.add_argument('-v', '--verbose', help="Set device log level to DEBUG")
-        parser.add_argument('-a', '--all-verbose', help="Set global log level to DEBUG")
+        parser.add_argument('-v', '--verbose', action='store_true', help="Set device log level to DEBUG")
+        parser.add_argument('-a', '--all-verbose', action='store_true', help="Set global log level to DEBUG")
         args = parser.parse_args()
         cls(name=args.name, verbose=args.verbose, all_verbose=args.all_verbose).main()
