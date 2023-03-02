@@ -27,7 +27,7 @@ class IndiProperty:
     @staticmethod
     def from_definition(message):
         for cls in (DefTextVector, DefNumberVector, DefSwitchVector, DefLightVector):
-            if isinstance(message, typing.get_args(cls)):
+            if isinstance(message, cls):
                 newcls = DEF_TO_PROPERTY[cls]
                 flds = dataclasses.fields(cls)
                 kwargs = {}
