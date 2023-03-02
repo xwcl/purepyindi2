@@ -219,6 +219,7 @@ class DefSwitch(DefValueMessageBase, OneSwitch):
 class DefLight(DefValueMessageBase, OneLight):
     _value: constants.PropertyState
 
+IndiDefElementMessageTypes = [DefText, DefNumber, DefSwitch, DefLight]
 IndiDefElementMessage = Union[DefText, DefNumber, DefSwitch, DefLight]
 
 @message
@@ -261,7 +262,7 @@ class PropertyMessageBase(MessageBase):
             did_change = True
         for element_name in message:
             if element_name not in self:
-                if isinstance(message[element_name], IndiDefElementMessage):
+                if isinstance(message[element_name], IndiDefElementMessageTypes):
                     # handle redefinition
                     self.add_element(message[element_name])
                     did_change = True
@@ -485,6 +486,17 @@ IndiSetMessage = Union[SetTextVector, SetNumberVector, SetSwitchVector, SetLight
 IndiDefSetMessage = Union[
     DefTextVector, DefNumberVector, DefSwitchVector, DefLightVector, SetTextVector,
     SetNumberVector, SetSwitchVector, SetLightVector
+]
+IndiDefSetDelMessageTypes = [
+    DefTextVector,
+    DefNumberVector,
+    DefSwitchVector,
+    DefLightVector,
+    SetTextVector,
+    SetNumberVector,
+    SetSwitchVector,
+    SetLightVector,
+    DelProperty,
 ]
 IndiDefSetDelMessage = Union[
     DefTextVector,

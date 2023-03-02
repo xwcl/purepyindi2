@@ -2,6 +2,7 @@ import time
 from io import BytesIO
 from .transports import IndiPipeConnection, IndiTcpConnection
 from .test_parser import NEW_NUMBER_MESSAGE, NEW_NUMBER_UPDATE
+from .constants import TransportEvent
 
 def test_pipe_transport():
     inbuf = BytesIO(NEW_NUMBER_MESSAGE)
@@ -10,7 +11,7 @@ def test_pipe_transport():
     msgs = []
     def handler(msg):
         msgs.append(msg)
-    conn.register_message_handler(handler)
+    conn.add_callback(TransportEvent.inbound, handler)
     conn.start()
     time.sleep(0.2)
     conn.stop()

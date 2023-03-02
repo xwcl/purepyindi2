@@ -146,7 +146,7 @@ class IndiClient:
         log.debug(f"Unregistered callback {cb=} for {device_name=} {property_name=}")
 
     def handle_message(self, message):
-        if not isinstance(message, messages.IndiDefSetDelMessage):
+        if not isinstance(message, messages.IndiDefSetDelMessageTypes):
             return
         self.dispatch_callbacks(message)
         if isinstance(message, messages.DelProperty):
