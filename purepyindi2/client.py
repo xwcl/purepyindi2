@@ -129,7 +129,7 @@ class IndiClient:
             for property_name in self.callbacks[device_name]:
                 for cb in self.callbacks[device_name][property_name]:
                     should_fire = (
-                        device_name is constants.ALL or
+                        (device_name is constants.ALL) or
                         (device_name == message.device and property_name is constants.ALL) or
                         (device_name == message.device and property_name == message.name)
                     )
