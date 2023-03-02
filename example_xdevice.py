@@ -31,7 +31,7 @@ class ExampleDevice(device.XDevice):
 
     def loop(self):
         uptime_prop = self.properties['uptime']
-        uptime_prop['uptime_sec'].value += 1
+        uptime_prop['uptime_sec'] += 1
         self.update_property(uptime_prop)
         log.debug(f"Current uptime: {uptime_prop}")
 
