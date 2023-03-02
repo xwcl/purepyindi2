@@ -219,7 +219,7 @@ class DefSwitch(DefValueMessageBase, OneSwitch):
 class DefLight(DefValueMessageBase, OneLight):
     _value: constants.PropertyState
 
-IndiDefElementMessageTypes = [DefText, DefNumber, DefSwitch, DefLight]
+IndiDefElementMessageTypes = (DefText, DefNumber, DefSwitch, DefLight)
 IndiDefElementMessage = Union[DefText, DefNumber, DefSwitch, DefLight]
 
 @message
@@ -487,7 +487,7 @@ IndiDefSetMessage = Union[
     DefTextVector, DefNumberVector, DefSwitchVector, DefLightVector, SetTextVector,
     SetNumberVector, SetSwitchVector, SetLightVector
 ]
-IndiDefSetDelMessageTypes = [
+IndiDefSetDelMessageTypes = (
     DefTextVector,
     DefNumberVector,
     DefSwitchVector,
@@ -497,7 +497,7 @@ IndiDefSetDelMessageTypes = [
     SetSwitchVector,
     SetLightVector,
     DelProperty,
-]
+)
 IndiDefSetDelMessage = Union[
     DefTextVector,
     DefNumberVector,
