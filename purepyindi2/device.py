@@ -1,4 +1,5 @@
 import time
+import typing
 from functools import partial
 import logging
 from collections import defaultdict
@@ -74,7 +75,7 @@ class Device:
                 else:
                     log.debug(f"Sending all properties (for device {message.device})")
                     self.send_all_properties()
-        elif isinstance(message, messages.IndiNewMessage):
+        elif isinstance(message, typing.get_args(messages.IndiNewMessage)):
             if message.device == self.name and message.name in self.properties:
                 for cb in self.callbacks[message.name]:
                     try:

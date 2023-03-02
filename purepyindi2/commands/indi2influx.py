@@ -1,4 +1,5 @@
 import atexit
+import typing
 import datetime
 from functools import partial
 import logging
@@ -18,7 +19,7 @@ def on_exit(db_client: InfluxDBClient, write_api: WriteApi):
     db_client.close()
 
 def relay(message : messages.IndiMessage, write_api: WriteApi, bucket: str):
-    if not isinstance(message, (messages.DefNumberVector, messages.SetNumberVector)):
+    if not isinstance(message, typing.get_args(messages.DefNumberVector) + typing.get_args(messages.SetNumberVector)):
         return
     device_name, prop_name = message.device, message.name
     for element_name, elem in message.elements():

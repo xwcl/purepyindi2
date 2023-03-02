@@ -24,7 +24,7 @@ class IndiServerClient:
         self.handle_inbound(message)
 
     def handle_server_to_client_message(self, message):
-        if not isinstance(message, messages.IndiDefSetDelMessageTypes):
+        if not isinstance(message, typing.get_args(messages.IndiDefSetDelMessageTypes)):
             return
         device_name = message.device
         property_name = message.name

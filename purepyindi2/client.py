@@ -1,5 +1,6 @@
 import logging
 import dataclasses
+import typing
 import warnings
 from collections import defaultdict
 from . import constants, transports, properties, messages, utils
@@ -146,7 +147,7 @@ class IndiClient:
         log.debug(f"Unregistered callback {cb=} for {device_name=} {property_name=}")
 
     def handle_message(self, message):
-        if not isinstance(message, messages.IndiDefSetDelMessageTypes):
+        if not isinstance(message, typing.get_args(messages.IndiDefSetDelMessageTypes)):
             return
         self.dispatch_callbacks(message)
         if isinstance(message, messages.DelProperty):
@@ -165,7 +166,7 @@ class IndiClient:
                             # if it was somehow deleted while we were iterating we could get a KeyError, but we were trying to delete anyway.
                             pass
                         log.debug(f"Deleted matching {propname} property on device {message.device}")
-        elif isinstance(message, (messages.IndiDefMessage, messages.IndiSetMessage)):
+        elif isinstance(message, typing.get_args(messages.IndiDefMessage) + typing.get_args(messages.IndiSetMessage)):
             device_name = message.device
             property_name = message.name
             interested = (
@@ -176,7 +177,7 @@ class IndiClient:
             if not interested:
                 return
             if device_name not in self._devices or property_name not in self._devices[device_name]:
-                if isinstance(message, messages.IndiDefMessage):
+                if isinstance(message, typing.get_args(messages.IndiDefMessage)):
                     self._devices[device_name][property_name] = properties.IndiProperty.from_definition(message)
                     log.debug(f"Constructed new property {self._devices[device_name][property_name]} from definition")
             else:
