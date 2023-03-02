@@ -84,7 +84,7 @@ class IndiClient:
                 self.get_properties(spec)
         elif isinstance(args[0], str):
             if '.' in args[0]:
-                parts = args[0].split('.', 1)
+                parts = args[0].split('.')
             else:
                 parts = [args[0]]
             device_name = parts[0]
