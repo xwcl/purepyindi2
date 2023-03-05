@@ -149,7 +149,6 @@ class IndiClient:
     def handle_message(self, message):
         if not isinstance(message, typing.get_args(messages.IndiDefSetDelMessage)):
             return
-        self.dispatch_callbacks(message)
         if isinstance(message, messages.DelProperty):
             if message.device is None:
                 devices = self._devices.keys()
@@ -182,6 +181,7 @@ class IndiClient:
                     log.debug(f"Constructed new property {self._devices[device_name][property_name]} from definition")
             else:
                 self._devices[message.device][message.name].apply_update(message)
+        self.dispatch_callbacks(message)
 
     def __getitem__(self, key):
         parts = key.split('.', 2)
