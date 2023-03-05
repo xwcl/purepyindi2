@@ -63,6 +63,7 @@ class Role(Enum):
 
 class TransportEvent(Enum):
     connection = 'connection'
+    disconnection = 'disconnection'
     inbound = 'inbound'
     outbound = 'outbound'
 

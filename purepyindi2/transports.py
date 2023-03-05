@@ -92,7 +92,7 @@ class IndiTcpConnection(IndiConnection):
                 pass
             except socket.error:
                 self.status = ConnectionStatus.ERROR
-                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                self.dispatch_callbacks(TransportEvent.disconnection, self.status)
                 break
         transport.shutdown(socket.SHUT_WR)
 
@@ -107,11 +107,11 @@ class IndiTcpConnection(IndiConnection):
             except socket.error as e:
                 log.exception("Socket error caught, disconnected")
                 self.status = ConnectionStatus.ERROR
-                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                self.dispatch_callbacks(TransportEvent.disconnection, self.status)
                 break
             if data == b'':
                 self.status = ConnectionStatus.STOPPED
-                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                self.dispatch_callbacks(TransportEvent.disconnection, self.status)
                 log.debug("Got EOF from server")
                 break
             self._parser.parse(data)
@@ -165,7 +165,7 @@ class IndiTcpClientConnection(IndiTcpConnection):
                     continue
                 else:
                     self.status = ConnectionStatus.ERROR
-                    self.dispatch_callbacks(TransportEvent.connection, self.status)
+                    self.dispatch_callbacks(TransportEvent.disconnection, self.status)
                     raise
             
             self._start_reader_writer_threads()
@@ -174,11 +174,11 @@ class IndiTcpClientConnection(IndiTcpConnection):
 
             if not self.reconnect_automatically:
                 self.status = ConnectionStatus.ERROR
-                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                self.dispatch_callbacks(TransportEvent.disconnection, self.status)
                 raise ConnectionError("Connection failed and reconnect_automatically is False")
             else:
                 self.status = ConnectionStatus.CONNECTING
-                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                self.dispatch_callbacks(TransportEvent.disconnection, self.status)
                 log.error(f"Connection failed. Reconnecting to {self.host}:{self.port} in {RECONNECTION_DELAY_SEC} sec...")
                 time.sleep(RECONNECTION_DELAY_SEC)
 
@@ -194,7 +194,7 @@ class IndiTcpClientConnection(IndiTcpConnection):
     def stop(self):
         if self.status is ConnectionStatus.CONNECTED:
             self.status = ConnectionStatus.STOPPED
-            self.dispatch_callbacks(TransportEvent.connection, self.status)
+            self.dispatch_callbacks(TransportEvent.disconnection, self.status)
             self._reconnection_monitor.join(BLOCK_TIMEOUT_SEC)
             self._writer = None
             self._reader = None
@@ -211,7 +211,7 @@ class IndiTcpServerConnection(IndiTcpConnection):
     def stop(self):
         if self.status is ConnectionStatus.CONNECTED:
             self.status = ConnectionStatus.STOPPED
-            self.dispatch_callbacks(TransportEvent.connection, self.status)
+            self.dispatch_callbacks(TransportEvent.disconnection, self.status)
             self._writer.join(BLOCK_TIMEOUT_SEC)
             self._writer = None
             self._reader.join(BLOCK_TIMEOUT_SEC)
@@ -386,9 +386,9 @@ class AsyncIndiTcpConnection(IndiTcpConnection):
                 else:
                     self.status = ConnectionStatus.ERROR
                     log.info("Connection state changed to ERROR")
-                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                self.dispatch_callbacks(TransportEvent.disconnection, self.status)
                 log.debug("Dispatched callbacks for connection state change")
-                await self.dispatch_async_callbacks(TransportEvent.connection, self.status)
+                await self.dispatch_async_callbacks(TransportEvent.disconnection, self.status)
                 log.debug("Dispatched async callbacks for connection state change")
                 if reconnect_automatically:
                     log.debug(f"Going to sleep for {RECONNECTION_DELAY_SEC} sec")

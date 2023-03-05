@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 __all__ = ['IndiClient']
 
 class IndiClient:
+    _has_connected_once : bool = False
     def __init__(self, connection=None):
         self._devices = defaultdict(dict)
         # funky nested defaultdict for callbacks supports 3-level lookups like
@@ -110,12 +111,31 @@ class IndiClient:
             raise ValueError("Supply arguments as list of dotted property specs or as (device, property)")
 
 
+    def handle_connectionstatus_change(self, connection_status : constants.ConnectionStatus):
+        if self._has_connected_once and connection_status.CONNECTED:
+            log.debug("Re-connecting and requesting all the same properties")
+            if (constants.ALL, constants.ALL) in self._interested_properties:
+                msg = messages.GetProperties()
+                self.connection.send(msg)
+                log.debug("Re-connected and issued catch-all getProperties")
+            else:
+                for device_name, prop_name in self._interested_properties:
+                    self.connection.send(messages.GetProperties(
+                        device=device_name,
+                        name=prop_name if prop_name is not constants.ALL else None,
+                    ))
+                    log.debug(f"Re-connected and issued getProperties for {device_name}.{prop_name}")
+        elif connection_status.CONNECTED:
+            self._has_connected_once = True
+            log.debug("Client connected for the first time")
+
     def connect(self, host: str=constants.DEFAULT_HOST, port: int=constants.DEFAULT_PORT):
         # reset warning in case this is not the first time we're connecting
         self.last_get_properties_scope = None
         if self.connection is None:
             self.connection = transports.IndiTcpClientConnection(host=host, port=port)
         self.connection.add_callback(constants.TransportEvent.inbound, self.handle_message)
+        self.connection.add_callback(constants.TransportEvent.connection, self.handle_connectionstatus_change)
         self.connection.start()
 
     def _register_interest(self, device_name, property_name):
