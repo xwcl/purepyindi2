@@ -1,4 +1,5 @@
 import time
+import subprocess
 import datetime
 import sys
 import os
@@ -165,16 +166,16 @@ class XDevice(Device):
 
     def lock_pid_file(self):
         pid_dir = self.prefix_dir + f"/sys/{self.name}"
-        os.makedirs(pid_dir, exist_ok=True)
+        thisproc = psutil.Process()
         pid_file = pid_dir + "/pid"
+        pid = None
         if os.path.exists(pid_file):
             with open(pid_file) as fh:
                 try:
                     pid = int(fh.read())
                     log.debug(f"Got {pid=} from {pid_file}")
                 except Exception:
-                    pid = None
-
+                    pass
         if pid is not None:
             if psutil.pid_exists(pid):
                 proc = psutil.Process(pid)
@@ -182,15 +183,11 @@ class XDevice(Device):
                     if proc.exe() == sys.executable and self.name in sys.argv:
                         log.error(f"Found process ID {pid}: {proc.cmdline()} [{proc.status()}]")
                         sys.exit(1)
-            else:
-                log.debug("Removing stale pid file {pid_file}")
-                os.remove(pid_file)
-        thisproc = psutil.Process()
-        with open(pid_file, 'w') as fh:
-            fh.write(thisproc.pid)
+        log.debug(f"Writing PID file with PID {thisproc.pid}")
+        subprocess.check_call(["sudo", "/opt/MagAOX/bin/write_magaox_pidfile", str(thisproc.pid), self.name])
 
     def main(self):
-        # self.lock_pid_file()
+        self.lock_pid_file()
         super().main()
 
     @classmethod
