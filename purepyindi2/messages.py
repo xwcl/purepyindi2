@@ -267,7 +267,8 @@ class PropertyMessageBase(MessageBase):
                     did_change = True
                 else:
                     log.debug(f"Got element {element_name} as {message[element_name]} but haven't seen it before")
-            current_value = self._elements[element_name]._value
+            elem_present = element_name in self._elements
+            current_value = self._elements[element_name]._value if elem_present else None
             if current_value != message._elements[element_name]._value:
                 self._elements[element_name]._value = message._elements[element_name]._value
                 did_change = True

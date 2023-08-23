@@ -27,6 +27,7 @@ class ExampleDevice(device.XDevice):
             min=0, max=1_000_000, step=1, _value=0.0
         ))
         self.add_property(nv)
+        self.wake_INDI_server()
         log.debug("Set up complete")
 
     def loop(self):

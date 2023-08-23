@@ -190,6 +190,20 @@ class XDevice(Device):
         self.lock_pid_file()
         super().main()
 
+    def wake_INDI_server(self):
+        try:
+            fifodir = os.path.join(self.prefix_dir,'drivers','fifos')
+            ctl = os.path.join(fifodir,'indiserver.ctrl')
+            if not os.path.exists(ctl): return
+            with open(ctl,'wb') as f:
+                myfifo = os.path.join(fifodir,self.name)
+                start_msg = (f'start {myfifo}\n').encode('8859')
+                n = f.write(start_msg)
+                log.debug(f"Wrote [{start_msg}; length={n}] to [{ctl}]")
+        except:
+            import traceback as tb
+            log.debug(tb.format_exc())
+
     @classmethod
     def console_app(cls):
         import argparse
