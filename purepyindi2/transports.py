@@ -7,6 +7,7 @@ import queue
 import socket
 import sys
 import os
+import pwd
 from os.path import exists
 import stat
 import threading
@@ -309,7 +310,12 @@ def make_fifo_and_open(path, mode):
     return os.fdopen(fd, mode)
 
 class IndiFifoConnection(IndiPipeConnection):
+    MAGAOX_USER = 'xsup'
+
     def _make_and_open_fifos(self):
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        if current_user != self.MAGAOX_USER:
+            raise RuntimeError(f"Magical MagAO-X FIFOs must only be made by xsup, but you appear to be running as {current_user}")
         return (
             make_fifo_and_open(self.input_fifo_path, 'r'),
             make_fifo_and_open(self.output_fifo_path, 'w'),
