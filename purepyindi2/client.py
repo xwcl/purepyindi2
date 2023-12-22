@@ -139,6 +139,7 @@ class IndiClient:
         self.connection.start()
 
     def _register_interest(self, device_name, property_name):
+        log.debug(f"Registering interest in {device_name=} {property_name=}")
         self._interested_properties.add((device_name, property_name))
 
     def _add_property(self, prop):
@@ -206,18 +207,22 @@ class IndiClient:
     def __getitem__(self, key):
         parts = key.split('.', 2)
         device_name = parts[0]
+        if len(self._interested_properties) == 0:
+            error_suffix = ", not currently listening for any. Perhaps you need to call get_properties()?"
+        else:
+            error_suffix = ", currently listening for: " + str(self._interested_properties)
         if device_name not in self._devices:
-            raise KeyError(f"No device {device_name} represented within these properties")
+            raise KeyError(f"No device {device_name} represented within these properties" + error_suffix)
         device_props = self._devices[device_name]
         if len(parts) > 1:
             property_name = parts[1]
             if property_name not in device_props:
-                raise KeyError(f"No property {device_name}.{property_name} represented within these properties")
+                raise KeyError(f"No property {device_name}.{property_name} represented within these properties" + error_suffix)
             prop = device_props[property_name]
             if len(parts) > 2:
                 element_name = parts[2]
                 if element_name not in prop:
-                    raise KeyError(f"No element {device_name}.{property_name}.{element_name} represented within these properties")
+                    raise KeyError(f"No element {device_name}.{property_name}.{element_name} represented within these properties" + error_suffix)
                 return prop[element_name]
             else:
                 return prop
@@ -227,18 +232,22 @@ class IndiClient:
     def __setitem__(self, key, value):
         parts = key.split('.', 2)
         device_name = parts[0]
+        if len(self._interested_properties) == 0:
+            error_suffix = ", not currently listening for any. Perhaps you need to call get_properties()?"
+        else:
+            error_suffix = ", currently listening for: " + str(self._interested_properties)
         if device_name not in self._devices:
-            raise KeyError(f"No device {device_name} represented within these properties")
+            raise KeyError(f"No device {device_name} represented within these properties" + error_suffix)
         device_props = self._devices[device_name]
         if len(parts) > 1:
             property_name = parts[1]
             if property_name not in device_props:
-                raise KeyError(f"No property {device_name}.{property_name} represented within these properties")
+                raise KeyError(f"No property {device_name}.{property_name} represented within these properties" + error_suffix)
             prop = device_props[property_name]
             if len(parts) > 2:
                 element_name = parts[2]
                 if element_name not in prop:
-                    raise KeyError(f"No element {device_name}.{property_name}.{element_name} represented within these properties")
+                    raise KeyError(f"No element {device_name}.{property_name}.{element_name} represented within these properties" + error_suffix)
                 try:
                     value = prop[element_name].value_from_text(value)
                 except Exception:
