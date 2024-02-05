@@ -156,10 +156,10 @@ class IndiTcpClientConnection(IndiTcpConnection):
                 self._socket.settimeout(BLOCK_TIMEOUT_SEC)
                 self.status = ConnectionStatus.CONNECTED
                 self.dispatch_callbacks(TransportEvent.connection, self.status)
-                log.debug(f"Connected to {self.host}:{self.port}")
+                log.info(f"Connected to {self.host}:{self.port}")
             except ConnectionError as e:
                 self._socket.close()
-                log.exception(f"Failed to connect to {self.host}:{self.port}")
+                log.error(f"Failed to connect to {self.host}:{self.port} [{e}]")
                 if self.reconnect_automatically:
                     log.info(f"Retrying in {RECONNECTION_DELAY_SEC} sec...")
                     time.sleep(RECONNECTION_DELAY_SEC)
