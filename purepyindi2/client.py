@@ -1,5 +1,5 @@
 import logging
-import dataclasses
+import time
 import typing
 import warnings
 from collections import defaultdict
@@ -110,8 +110,70 @@ class IndiClient:
         else:
             raise ValueError("Supply arguments as list of dotted property specs or as (device, property)")
 
+    def get_properties_and_wait(self, *args, timeout_sec=5.0, wait_sleep_sec=0.1):
+        """After subscribing to properties, wait up to `timeout_sec` for
+        the properties to become available. If the timeout expires
+        and the property definitions haven't been received,
+        this raises a `TimeoutError`.
+
+        Parameters
+        ----------
+        *args
+            see `get_properties`
+        timeout_sec : float
+            Maximum timeout (+/- `wait_sleep_sec`)
+        wait_sleep_sec : float
+            Duration of wait between iterations of checking
+            for readiness
+
+        **Note:** For catch-all requests (i.e. all devices, or all
+        properties for a given device), this waits until **one**
+        property definition has been received. This is because there is
+        no way to know if a device will send more property definitions
+        later.
+        """
+        self.get_properties(*args)
+        start = time.time()
+
+        def check_missing():
+            any_missing = False
+            for device_name, property_name in self._interested_properties:
+                if device_name is constants.ALL and len(self._devices) == 0:
+                    any_missing = True
+                if device_name not in self._devices:
+                    any_missing = True
+                if property_name is constants.ALL and len(self._devices[device_name]) == 0:
+                    any_missing = True
+                if property_name not in self._devices[device_name]:
+                    any_missing = True
+            return any_missing
+
+        while time.time() - start < timeout_sec and check_missing():
+            time.sleep(wait_sleep_sec)
+            continue
+
+        if not check_missing():
+            return
+
+        property_keys = []
+        for device_name, property_name in self._interested_properties:
+            if device_name in self._devices and property_name in self._devices[device_name]:
+                continue
+            if device_name is constants.ALL:
+                device_part = '*'
+            else:
+                device_part = device_name
+            if property_name is constants.ALL:
+                property_part = '*'
+            else:
+                property_part = property_name
+            property_keys.append(f"{device_part}.{property_part}")
+        raise TimeoutError(f"Timed out after {timeout_sec} sec waiting for these properties: {property_keys}")
 
     def handle_connectionstatus_change(self, connection_status : constants.ConnectionStatus):
+        '''When reconnecting, issue a <getProperties> message for all
+        properties we have previously registered interest for.
+        '''
         if self._has_connected_once and connection_status.CONNECTED:
             log.debug("Re-connecting and requesting all the same properties")
             if (constants.ALL, constants.ALL) in self._interested_properties:
@@ -130,6 +192,7 @@ class IndiClient:
             log.debug("Client connected for the first time")
 
     def connect(self, host: str=constants.DEFAULT_HOST, port: int=constants.DEFAULT_PORT):
+        '''Creates a TCP connection on `host`:`port` and starts handling incoming messages'''
         # reset warning in case this is not the first time we're connecting
         self.last_get_properties_scope = None
         if self.connection is None:
@@ -138,15 +201,19 @@ class IndiClient:
         self.connection.add_callback(constants.TransportEvent.connection, self.handle_connectionstatus_change)
         self.connection.start()
 
-    def _register_interest(self, device_name, property_name):
+    def _register_interest(self, device_name : str, property_name : str):
         log.debug(f"Registering interest in {device_name=} {property_name=}")
         self._interested_properties.add((device_name, property_name))
 
-    def _add_property(self, prop):
+    def _add_property(self, prop : properties.IndiProperty):
         self._devices[prop.device][prop.name] = prop
         log.debug(f"Added {prop} to properties proxy")
 
-    def dispatch_callbacks(self, message):
+    def dispatch_callbacks(self, message : messages.IndiDefSetDelMessage):
+        '''Loop through the nested dict of `self.callbacks` and compare
+        message.device and message.name to the callback keys. If matched,
+        call the corresponding callback with a `messages.IndiDefSetDelMessage`
+        '''
         for device_name in self.callbacks:
             for property_name in self.callbacks[device_name]:
                 for cb in self.callbacks[device_name][property_name]:
@@ -159,15 +226,31 @@ class IndiClient:
                         cb(message)
                         log.debug(f"Fired {cb=}")
 
-    def register_callback(self, cb, device_name=constants.ALL, property_name=constants.ALL):
+    def register_callback(self,
+                          cb : typing.Callable[[messages.IndiDefSetDelMessage], typing.Any],
+                          device_name=constants.ALL, property_name=constants.ALL):
+        '''Register a function `cb(message: IndiDefSetDelMessage)` to be called
+        when new INDI messages update properties in this client. This can optionally
+        be scoped by `device_name` and `property_name`, otherwise it is called for all
+        messages
+        '''
         self.callbacks[device_name][property_name].append(cb)
         log.debug(f"Registered callback {cb=} for {device_name=} {property_name=}")
 
-    def unregister_callback(self, cb, device_name=constants.ALL, property_name=constants.ALL):
+    def unregister_callback(self,
+                            cb : typing.Callable[[messages.IndiDefSetDelMessage], typing.Any],
+                            device_name=constants.ALL, property_name=constants.ALL):
+        '''Remove a callback function from the set of callbacks for a
+        `(device_name, property_name)` pair'''
         self.callbacks[device_name][property_name].remove(cb)
         log.debug(f"Unregistered callback {cb=} for {device_name=} {property_name=}")
 
-    def handle_message(self, message):
+    def handle_message(self, message : messages.IndiDefSetDelMessage):
+        """Handles property definition, updates, and deletion for all devices.
+        If the incoming message is one of the `messages.IndiDefSetDelMessage`
+        types, the corresponding properties are created/updated/deleted as
+        needed and `dispatch_callbacks` is called with the message.
+        """
         if not isinstance(message, typing.get_args(messages.IndiDefSetDelMessage)):
             return
         if isinstance(message, messages.DelProperty):
