@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 import typing
 import warnings
@@ -18,6 +19,7 @@ class IndiClient:
         # callbacks['device'][constants.ALL].append(callback_fn)  # device level
         # callbacks[constants.ALL][constants.ALL].append(callback_fn)  # world level
         self.callbacks = defaultdict(lambda: defaultdict(list))
+        self.callbacks_lock = threading.Lock()
         self._interested_properties = set()
         self.connection = connection
         self.last_get_properties_scope = None
@@ -214,17 +216,18 @@ class IndiClient:
         message.device and message.name to the callback keys. If matched,
         call the corresponding callback with a `messages.IndiDefSetDelMessage`
         '''
-        for device_name in self.callbacks:
-            for property_name in self.callbacks[device_name]:
-                for cb in self.callbacks[device_name][property_name]:
-                    should_fire = (
-                        (device_name is constants.ALL) or
-                        (device_name == message.device and property_name is constants.ALL) or
-                        (device_name == message.device and property_name == message.name)
-                    )
-                    if should_fire:
-                        cb(message)
-                        log.debug(f"Fired {cb=}")
+        with self.callbacks_lock:
+            for device_name in self.callbacks:
+                for property_name in self.callbacks[device_name]:
+                    for cb in self.callbacks[device_name][property_name]:
+                        should_fire = (
+                            (device_name is constants.ALL) or
+                            (device_name == message.device and property_name is constants.ALL) or
+                            (device_name == message.device and property_name == message.name)
+                        )
+                        if should_fire:
+                            cb(message)
+                            log.debug(f"Fired {cb=}")
 
     def register_callback(self,
                           cb : typing.Callable[[messages.IndiDefSetDelMessage], typing.Any],
@@ -234,7 +237,8 @@ class IndiClient:
         be scoped by `device_name` and `property_name`, otherwise it is called for all
         messages
         '''
-        self.callbacks[device_name][property_name].append(cb)
+        with self.callbacks_lock:
+            self.callbacks[device_name][property_name].append(cb)
         log.debug(f"Registered callback {cb=} for {device_name=} {property_name=}")
 
     def unregister_callback(self,

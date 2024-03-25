@@ -57,6 +57,7 @@ class Device:
 
     def delete_property(self, prop : IndiProperty):
         self.connection.send(messages.DelProperty(device=self.name, name=prop.name))
+        del self.properties[prop.name]
 
     def update_property(self, prop : IndiProperty):
         self.connection.send(prop.make_set_property())
@@ -100,9 +101,9 @@ class Device:
         pass
 
     def delete_all_properties(self):
-        for prop_name in self.properties:
+        for prop_name in tuple(self.properties.keys()):
             self.delete_property(self.properties[prop_name])
-            log.debug(f"Deleted {self.properties[prop_name]}")
+            log.debug(f"Deleted {prop_name} property")
 
     def main(self):
         self.connection.start()
@@ -118,6 +119,14 @@ class Device:
     def _wrap_loop(self):
         '''Allow subclasses to customize behavior before and after calling `loop`'''
         self.loop()
+
+    @property
+    def connected(self):
+        if isinstance(self.client, MockClient):
+            return False
+        elif self.client.status != constants.ConnectionStatus.CONNECTED:
+            return False
+        return True
 
     def run(self):
         self.client = client.IndiClient()
