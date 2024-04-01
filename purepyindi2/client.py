@@ -112,6 +112,21 @@ class IndiClient:
         else:
             raise ValueError("Supply arguments as list of dotted property specs or as (device, property)")
 
+    @property
+    def interested_properties_missing(self):
+        any_missing = False
+        for device_name, property_name in self._interested_properties:
+            log.debug(f"{device_name=} {property_name=} {len(self._devices)=} {len(self._devices.get(device_name, []))=}")
+            if device_name is constants.ALL and len(self._devices) == 0:
+                any_missing = True
+            if self._devices.get(device_name) is None:
+                any_missing = True
+            if property_name is constants.ALL and len(self._devices[device_name]) == 0:
+                any_missing = True
+            if property_name is not constants.ALL and self._devices[device_name].get(property_name) is None:
+                any_missing = True
+        return any_missing
+
     def get_properties_and_wait(self, *args, timeout_sec=5.0, wait_sleep_sec=0.1):
         """After subscribing to properties, wait up to `timeout_sec` for
         the properties to become available. If the timeout expires
@@ -137,24 +152,13 @@ class IndiClient:
         self.get_properties(*args)
         start = time.time()
 
-        def check_missing():
-            any_missing = False
-            for device_name, property_name in self._interested_properties:
-                if device_name is constants.ALL and len(self._devices) == 0:
-                    any_missing = True
-                if device_name not in self._devices:
-                    any_missing = True
-                if property_name is constants.ALL and len(self._devices[device_name]) == 0:
-                    any_missing = True
-                if property_name not in self._devices[device_name]:
-                    any_missing = True
-            return any_missing
 
-        while time.time() - start < timeout_sec and check_missing():
+
+        while time.time() - start < timeout_sec and self.interested_properties_missing:
             time.sleep(wait_sleep_sec)
             continue
 
-        if not check_missing():
+        if not self.interested_properties_missing:
             return
 
         property_keys = []
