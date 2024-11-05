@@ -163,7 +163,7 @@ class OneNumber(ValueMessageBase):
     
     def validate(self, value) -> bool:
         if value < self.min or value > self.max:
-            warnings.warn(f"Value {value} isn't {self.min} <= value <= {self.max} (bounds from property definition)")
+            warnings.warn(f"The device defines this property as taking values between {self.min} and {self.max}. Your requested value {value} may be ignored by the device, or the device may be reporting incorrect bounds.")
         try:
             value = float(value)
             return True
