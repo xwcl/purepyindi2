@@ -58,7 +58,8 @@ class Device:
     def delete_property(self, prop : IndiProperty):
         self.connection.send(messages.DelProperty(device=self.name, name=prop.name))
         del self.properties[prop.name]
-        del self.callbacks[prop.name]
+        if prop.name in self.callbacks:
+            del self.callbacks[prop.name]
 
     def update_property(self, prop : IndiProperty):
         self.connection.send(prop.make_set_property())
