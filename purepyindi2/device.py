@@ -112,11 +112,22 @@ class Device:
         try:
             self.run()
         finally:
-            self.teardown()
-            log.debug("Teardown complete")
-            self.delete_all_properties()
-            self.connection.stop()
-            log.debug("Connection stopped")
+            try:
+                self.teardown()
+                log.debug("Teardown complete")
+            except Exception as e:
+                log.exception("Failed to teardown while exiting")
+            try:
+                self.delete_all_properties()
+                log.debug("Sent delProperties messges to clean up our properties")
+            except Exception as e:
+                log.exception("Failed to send delProperties messages to clean up our properties")
+            try:
+                self.connection.stop()
+                log.debug("Connection stopped")
+            except Exception as e:
+                log.exception("Failed to close connection cleanly")
+            log.info("Shutting down")
 
     def _wrap_loop(self):
         '''Allow subclasses to customize behavior before and after calling `loop`'''
