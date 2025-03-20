@@ -127,6 +127,29 @@ class IndiClient:
                 any_missing = True
         return any_missing
 
+    def wait_to_connect(self, timeout_sec=None, wait_sleep_sec=0.1):
+        """Wait for the connection to become ready. (Note that it's still possible
+        for this function to return and the connection to be closed or broken, if
+        that should happen immediately after connecting.)
+
+        Parameters
+        ----------
+        *args
+            see `get_properties`
+        timeout_sec : Optional[float]
+            Maximum timeout (+/- `wait_sleep_sec`), or None (default)
+            for indefinite wait
+        wait_sleep_sec : float
+            Duration of wait between iterations of checking
+            for readiness
+        """
+        start = time.time()
+
+        while self.status is not constants.ConnectionStatus.CONNECTED:
+            if timeout_sec is not None and time.time() - start >= timeout_sec:
+                raise TimeoutError(f"Timed out after {timeout_sec} sec waiting for connection to become ready: {self.connection}")
+            time.sleep(wait_sleep_sec)
+
     def get_properties_and_wait(self, *args, timeout_sec=5.0, wait_sleep_sec=0.1):
         """After subscribing to properties, wait up to `timeout_sec` for
         the properties to become available. If the timeout expires
@@ -152,11 +175,8 @@ class IndiClient:
         self.get_properties(*args)
         start = time.time()
 
-
-
         while time.time() - start < timeout_sec and self.interested_properties_missing:
             time.sleep(wait_sleep_sec)
-            continue
 
         if not self.interested_properties_missing:
             return
