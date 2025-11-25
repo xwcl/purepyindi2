@@ -12,7 +12,6 @@ with open(path.join(HERE, PROJECT, 'VERSION'), encoding='utf-8') as f:
 
 extras = {
     'dev': ['pytest'],
-    'indi2influx': ['influxdb-client'],
     'ipyindi': ['IPython'],
     'speedup': ['ciso8601'],
     'device': ['psutil'],
