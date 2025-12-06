@@ -150,15 +150,26 @@ class IndiTcpClientConnection(IndiTcpConnection):
         super().__init__(*args, **kwargs)
     def _reconnection_monitor(self):
         while self.status is not ConnectionStatus.STOPPED:
+            log.debug("Creating socket...")
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            log.debug(f"Created {self._socket}")
             try:
+                log.debug(f"Opening {self.host}:{self.port}...")
                 self._socket.connect((self.host, self.port))
+                log.debug(f"Opened {self.host}:{self.port}")
                 self._socket.settimeout(BLOCK_TIMEOUT_SEC)
+                log.debug(f"Set timeout to {BLOCK_TIMEOUT_SEC}")
                 self.status = ConnectionStatus.CONNECTED
-                self.dispatch_callbacks(TransportEvent.connection, self.status)
                 log.info(f"Connected to {self.host}:{self.port}")
+                self.dispatch_callbacks(TransportEvent.connection, self.status)
+                log.debug("Connection state change callbacks dispatched.")
             except ConnectionError as e:
-                self._socket.close()
+                log.debug("Closing socket...")
+                try:
+                    self._socket.close()
+                    log.debug("Socket closed")
+                except Exception as e:
+                    log.exception("Unable to close socket")
                 log.error(f"Failed to connect to {self.host}:{self.port} [{e}]")
                 if self.reconnect_automatically:
                     log.info(f"Retrying in {RECONNECTION_DELAY_SEC} sec...")
@@ -168,7 +179,7 @@ class IndiTcpClientConnection(IndiTcpConnection):
                     self.status = ConnectionStatus.ERROR
                     self.dispatch_callbacks(TransportEvent.disconnection, self.status)
                     raise
-            
+
             self._start_reader_writer_threads()
             self._writer.join()
             self._reader.join()
