@@ -154,11 +154,11 @@ class IndiTcpClientConnection(IndiTcpConnection):
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             log.debug(f"Created {self._socket}")
             try:
-                log.debug(f"Opening {self.host}:{self.port}...")
-                self._socket.connect((self.host, self.port))
-                log.debug(f"Opened {self.host}:{self.port}")
                 self._socket.settimeout(BLOCK_TIMEOUT_SEC)
                 log.debug(f"Set timeout to {BLOCK_TIMEOUT_SEC}")
+                log.info(f"Opening {self.host}:{self.port}...")
+                self._socket.connect((self.host, self.port))
+                log.debug(f"Opened {self.host}:{self.port}")
                 self.status = ConnectionStatus.CONNECTED
                 log.info(f"Connected to {self.host}:{self.port}")
                 self.dispatch_callbacks(TransportEvent.connection, self.status)
