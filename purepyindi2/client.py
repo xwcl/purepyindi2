@@ -10,10 +10,53 @@ log = logging.getLogger(__name__)
 
 __all__ = ['IndiClient']
 
+class RemoteDevice(defaultdict):
+    name : str
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self) -> str:
+        out = ""
+        for prop_key in sorted(self.keys()):
+            for elem_key in sorted(self[prop_key]):
+                out += f"{self.name}.{prop_key}.{elem_key}={self[prop_key][elem_key]}\n"
+        return out
+
+class RemoteDevices:
+    _devices : defaultdict[str, RemoteDevice]
+    def __init__(self):
+        self._devices = defaultdict(RemoteDevice)
+
+    def __iter__(self):
+        for devname in self._devices:
+            yield devname
+
+    def __getitem__(self, key):
+        if key in self._devices:
+            return self._devices[key]
+        else:
+            raise KeyError(f"No device named {key} represented in these properties (Maybe you need to get_properties({repr(key)})?)")
+
+    def __setitem__(self, key, value):
+        self._devices[key] = value
+
+    def __delitem__(self, key):
+        del self._devices[key]
+
+    @property
+    def names(self):
+        return set(self._devices.keys())
+
+    def __repr__(self):
+        out = ""
+        for k in sorted(self._devices):
+            out += repr(self._devices[k])
+        return out
+
 class IndiClient:
     _has_connected_once : bool = False
     def __init__(self, connection=None):
-        self._devices = defaultdict(dict)
+        self.devices = RemoteDevices()
         # funky nested defaultdict for callbacks supports 3-level lookups like
         # callbacks['device']['name'].append(callback_fn)  # property level
         # callbacks['device'][constants.ALL].append(callback_fn)  # device level
@@ -27,15 +70,11 @@ class IndiClient:
             self.connect()
 
     def __repr__(self):
-        return f"<{self.__class__.__name__}: {self.status.value}, {len(self._devices)} devices found>"
+        return f"<{self.__class__.__name__}: {self.status.value}, {len(self.devices.names)} devices found>"
 
     @property
     def status(self):
         return self.connection.status if self.connection is not None else constants.ConnectionStatus.NOT_CONFIGURED
-
-    @property
-    def devices(self):
-        return set(self._devices.keys())
 
     def to_serializable(self) -> dict[str, dict[str, properties.IndiProperty]]:
         '''Return a dict mapping device names to dicts of
@@ -43,11 +82,11 @@ class IndiClient:
         a dataclass- and enum-aware serializer.
         '''
         devices = {}
-        for devname in self._devices:
+        for devname in self.devices.names:
             devices[devname] = {}
             thisdev = devices[devname]
-            for propname in self._devices[devname]:
-                thisdev[propname] = self._devices[devname][propname].to_serializable()
+            for propname in self.devices[devname]:
+                thisdev[propname] = self.devices[devname][propname].to_serializable()
                 # _role is always client in this context, save some bytes
                 del thisdev[propname]['_role']
         return {'devices': devices}
@@ -288,11 +327,11 @@ class IndiClient:
                 for k in devices:
                     del self._devices[k]
             else:
-                propnames = tuple(self._devices[message.device].keys())
+                propnames = tuple(self.devices[message.device].keys())
                 for propname in propnames:
                     if message.name is None or propname == message.name:
                         try:
-                            del self._devices[message.device][propname]
+                            del self.devices[message.device][propname]
                         except KeyError:
                             # if it was somehow deleted while we were iterating we could get a KeyError, but we were trying to delete anyway.
                             pass
@@ -307,12 +346,14 @@ class IndiClient:
             )
             if not interested:
                 return
-            if device_name not in self._devices or property_name not in self._devices[device_name]:
+            if device_name not in self.devices or property_name not in self.devices[device_name]:
                 if isinstance(message, typing.get_args(messages.IndiDefMessage)):
-                    self._devices[device_name][property_name] = properties.IndiProperty.from_definition(message)
-                    log.debug(f"Constructed new property {self._devices[device_name][property_name]} from definition")
+                    if device_name not in self.devices:
+                        self.devices[device_name] = RemoteDevice(device_name)
+                    self.devices[device_name][property_name] = properties.IndiProperty.from_definition(message)
+                    log.debug(f"Constructed new property {self.devices[device_name][property_name]} from definition")
             else:
-                self._devices[message.device][message.name].apply_update(message)
+                self.devices[message.device][message.name].apply_update(message)
         self.dispatch_callbacks(message)
 
     def __getitem__(self, key):
@@ -322,9 +363,9 @@ class IndiClient:
             error_suffix = ", not currently listening for any. Perhaps you need to call get_properties()?"
         else:
             error_suffix = ", currently listening for: " + str(self._interested_properties)
-        if device_name not in self._devices:
+        if device_name not in self.devices:
             raise KeyError(f"No device {device_name} represented within these properties" + error_suffix)
-        device_props = self._devices[device_name]
+        device_props = self.devices[device_name]
         if len(parts) > 1:
             property_name = parts[1]
             if property_name not in device_props:
@@ -347,9 +388,9 @@ class IndiClient:
             error_suffix = ", not currently listening for any. Perhaps you need to call get_properties()?"
         else:
             error_suffix = ", currently listening for: " + str(self._interested_properties)
-        if device_name not in self._devices:
+        if device_name not in self.devices:
             raise KeyError(f"No device {device_name} represented within these properties" + error_suffix)
-        device_props = self._devices[device_name]
+        device_props = self.devices[device_name]
         if len(parts) > 1:
             property_name = parts[1]
             if property_name not in device_props:
