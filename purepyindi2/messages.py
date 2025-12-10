@@ -160,7 +160,7 @@ class OneNumber(ValueMessageBase):
         except TypeError:
             raise ValueError(f"Unparseable number {repr(value)}")
         return parsed_number
-
+    
     def validate(self, value) -> bool:
         if value < self.min or value > self.max:
             warnings.warn(f"Value requested isn't in the range {self.min} <= value <= {self.max} (bounds reported by device)")
@@ -253,12 +253,6 @@ class PropertyMessageBase(MessageBase):
 
     def __iter__(self):
         return iter(self._elements.keys())
-
-    def __repr__(self):
-        out = ""
-        for k in sorted(self):
-            out += f"{self.device}.{self.name}.{k}={self[k]}\n"
-        return out
 
     def apply_update(self, message):
         did_change = False
