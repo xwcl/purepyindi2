@@ -367,12 +367,12 @@ class IndiClient:
             error_suffix = ", currently listening for: " + str(self._interested_properties)
         if device_name not in self.devices:
             raise KeyError(f"No device {device_name} represented within these properties" + error_suffix)
-        device_props = self.devices[device_name]
+        remote_device = self.devices[device_name]
         if len(parts) > 1:
             property_name = parts[1]
-            if property_name not in device_props:
+            if property_name not in remote_device:
                 raise KeyError(f"No property {device_name}.{property_name} represented within these properties" + error_suffix)
-            prop = device_props[property_name]
+            prop = remote_device[property_name]
             if len(parts) > 2:
                 element_name = parts[2]
                 if element_name not in prop:
@@ -381,7 +381,7 @@ class IndiClient:
             else:
                 return prop
         else:
-            return {name: prop for name, prop in device_props.items()}
+            return remote_device
 
     def __setitem__(self, key, value):
         parts = key.split('.', 2)
