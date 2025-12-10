@@ -155,14 +155,14 @@ class IndiClient:
     def interested_properties_missing(self):
         any_missing = False
         for device_name, property_name in self._interested_properties:
-            log.debug(f"{device_name=} {property_name=} {len(self._devices)=} {len(self._devices.get(device_name, []))=}")
-            if device_name is constants.ALL and len(self._devices) == 0:
+            log.debug(f"{device_name=} {property_name=} {len(self.devices.names)=} {len(self.devices._devices.get(device_name, []))=}")
+            if device_name is constants.ALL and len(self.devices.names) == 0:
                 any_missing = True
-            if self._devices.get(device_name) is None:
+            if device_name not in self.devices:
                 any_missing = True
-            if property_name is constants.ALL and len(self._devices[device_name]) == 0:
+            if property_name is constants.ALL and len(self.devices[device_name]) == 0:
                 any_missing = True
-            if property_name is not constants.ALL and self._devices[device_name].get(property_name) is None:
+            if property_name is not constants.ALL and self.devices[device_name].get(property_name) is None:
                 any_missing = True
         return any_missing
 
@@ -222,7 +222,7 @@ class IndiClient:
 
         property_keys = []
         for device_name, property_name in self._interested_properties:
-            if device_name in self._devices and property_name in self._devices[device_name]:
+            if device_name in self.devices.names and property_name in self.devices[device_name]:
                 continue
             if device_name is constants.ALL:
                 device_part = '*'
@@ -271,7 +271,7 @@ class IndiClient:
         self._interested_properties.add((device_name, property_name))
 
     def _add_property(self, prop : properties.IndiProperty):
-        self._devices[prop.device][prop.name] = prop
+        self.devices[prop.device][prop.name] = prop
         log.debug(f"Added {prop} to properties proxy")
 
     def dispatch_callbacks(self, message : messages.IndiDefSetDelMessage):
@@ -322,10 +322,10 @@ class IndiClient:
             return
         if isinstance(message, messages.DelProperty):
             if message.device is None:
-                devices = self._devices.keys()
+                devices = self.devices.names
                 log.debug(f"Deleting all properties for {list(devices)}")
                 for k in devices:
-                    del self._devices[k]
+                    del self.devices[k]
             else:
                 propnames = tuple(self.devices[message.device].keys())
                 for propname in propnames:
