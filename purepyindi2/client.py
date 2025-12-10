@@ -43,6 +43,9 @@ class RemoteDevices:
     def __delitem__(self, key):
         del self._devices[key]
 
+    def __contains__(self, key):
+        return key in self._devices
+
     @property
     def names(self):
         return set(self._devices.keys())
@@ -155,12 +158,11 @@ class IndiClient:
     def interested_properties_missing(self):
         any_missing = False
         for device_name, property_name in self._interested_properties:
-            log.debug(f"{device_name=} {property_name=} {len(self.devices.names)=} {len(self.devices._devices.get(device_name, []))=}")
             if device_name is constants.ALL and len(self.devices.names) == 0:
                 any_missing = True
             if device_name not in self.devices:
                 any_missing = True
-            if property_name is constants.ALL and len(self.devices[device_name]) == 0:
+            if property_name is constants.ALL and device_name not in self.devices:
                 any_missing = True
             if property_name is not constants.ALL and self.devices[device_name].get(property_name) is None:
                 any_missing = True
