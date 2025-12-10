@@ -18,8 +18,7 @@ class RemoteDevice(defaultdict):
     def __repr__(self) -> str:
         out = ""
         for prop_key in sorted(self.keys()):
-            for elem_key in sorted(self[prop_key]):
-                out += f"{self.name}.{prop_key}.{elem_key}={self[prop_key][elem_key]}\n"
+            out += repr(self[prop_key])
         return out
 
 class RemoteDevices:
