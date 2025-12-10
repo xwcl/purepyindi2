@@ -170,7 +170,7 @@ class IndiTcpClientConnection(IndiTcpConnection):
                     log.debug("Socket closed")
                 except Exception as e:
                     log.exception("Unable to close socket")
-                log.error(f"Failed to connect to {self.host}:{self.port} [{e}]")
+                    log.error(f"Failed to connect to {self.host}:{self.port} [{e}]")
                 if self.reconnect_automatically:
                     log.info(f"Retrying in {RECONNECTION_DELAY_SEC} sec...")
                     time.sleep(RECONNECTION_DELAY_SEC)
