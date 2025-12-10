@@ -1,14 +1,7 @@
 import time
-import subprocess
-import datetime
-import sys
-import os
-import psutil
 import typing
-from functools import partial
 import logging
 from collections import defaultdict
-import typing
 from .properties import IndiProperty
 from . import messages, constants, transports, client, properties
 from .client import IndiClient
@@ -29,7 +22,7 @@ class Device:
     name : str
     sleep_interval_sec : float = 1
     _setup_complete : bool = False  # set True when setup() has run
-    client : typing.Optional[IndiClient] = MockClient()
+    client : typing.Union[IndiClient, MockClient] = MockClient()
 
     def __init__(self, name, connection_class=transports.IndiPipeConnection):
         self.name = name

@@ -14,7 +14,6 @@ extras = {
     'dev': ['pytest'],
     'ipyindi': ['IPython'],
     'speedup': ['ciso8601'],
-    'device': ['psutil'],
 }
 all_deps = set()
 for _, deps in extras.items():
