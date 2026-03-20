@@ -25,6 +25,7 @@ from .constants import (
 __all__ = (
     'IndiConnection',
     'IndiTcpConnection',
+    'IndiTcpClientConnection',
     'IndiPipeConnection',
     'AsyncIndiTcpConnection',
 )
@@ -78,6 +79,9 @@ class IndiTcpConnection(IndiConnection):
     def __init__(self, *args, host=DEFAULT_HOST, port=DEFAULT_PORT, **kwargs):
         self.host, self.port = host, port
         super().__init__(*args, **kwargs)
+
+    def start(self):
+        raise NotImplementedError("Did you want IndiTcpClientConnection?")
 
     def _handle_outbound(self, transport : socket.socket):
         log.debug("Outbound handler started")
