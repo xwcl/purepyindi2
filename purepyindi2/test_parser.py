@@ -100,6 +100,20 @@ def test_set_number_update(myq, parser):
     set_update_payload = myq.get()
     assert set_update_payload == SET_NUMBER_UPDATE
 
+def test_set_number_update_ignores_sibling_chardata(myq, parser):
+    payload = b"""
+<setNumberVector device="test" name="prop" state="Idle" timestamp="2019-08-13T22:45:17.867692Z">
+itchVector>
+\t
+<oneNumber name="value">427739</oneNumber>
+</setNumberVector>
+"""
+    parser.parse(payload)
+    set_update_payload = myq.get()
+    assert set_update_payload.device == "test"
+    assert set_update_payload.name == "prop"
+    assert set_update_payload["value"] == 427739.0
+
 @pytest.mark.parametrize('msg_instance', [DEF_NUMBER_UPDATE, SET_NUMBER_UPDATE, NEW_NUMBER_UPDATE, DEL_PROPERTY_UPDATE])
 def test_roundtrip(msg_instance, myq, parser):
     outbytes = msg_instance.to_xml_bytes()

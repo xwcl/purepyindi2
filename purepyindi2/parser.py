@@ -67,6 +67,10 @@ class IndiStreamParser:
     def start_xml_element_handler(self, tag_name : str, tag_attributes : str):
         if self.accumulated_chardata.strip():
             log.debug(f'character data {repr(self.accumulated_chardata)} cannot be sibling of element, discarding')
+        # Chardata is only meaningful between matching start/end tags.
+        # If we see a start tag while chardata is pending, treat it as
+        # sibling noise and clear it before parsing the new element body.
+        self.accumulated_chardata = ''
         if tag_name in self.PROPERTY_DEF_LOOKUP:
             if self.pending_update is not None:
                 log.debug(f'property definition happening while we '
