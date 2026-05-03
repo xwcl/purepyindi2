@@ -11,6 +11,7 @@ import pwd
 from os.path import exists
 import stat
 import threading
+from typing import Optional
 from .parser import IndiStreamParser
 from .constants import (
     CHUNK_MAX_READ_SIZE,
@@ -146,6 +147,7 @@ class IndiTcpConnection(IndiConnection):
 
 class IndiTcpClientConnection(IndiTcpConnection):
     """Connection from client to server with optional reconnection logic"""
+    _monitor : Optional[threading.Thread]
     reconnect_automatically : bool = True
     def __init__(self, *args, reconnect_automatically=None, **kwargs):
         self._monitor = None
@@ -211,7 +213,7 @@ class IndiTcpClientConnection(IndiTcpConnection):
         if self.status is ConnectionStatus.CONNECTED:
             self.status = ConnectionStatus.STOPPED
             self.dispatch_callbacks(TransportEvent.disconnection, self.status)
-            self._reconnection_monitor.join(BLOCK_TIMEOUT_SEC)
+            self._monitor.join(BLOCK_TIMEOUT_SEC)
             self._writer = None
             self._reader = None
 
