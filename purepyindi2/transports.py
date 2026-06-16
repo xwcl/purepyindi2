@@ -338,14 +338,39 @@ class IndiFifoConnection(IndiPipeConnection):
             make_fifo_and_open(self.output_fifo_path, 'w'),
             make_fifo_and_open(self.control_fifo_path, 'w'),
         )
-    def __init__(self, *args, name=None, fifos_root="/tmp", **kwargs):
+
+    def __init__(self, *args, name=None, fifos_root="/tmp", indiserver_ctrl_path=None, **kwargs):
         if name is None:
             raise RuntimeError("Name must be supplied for FIFO transport")
+        self.name = name
+        self.fifos_root = fifos_root
         self.input_fifo_path = os.path.join(fifos_root, f"{name}.in")
         self.output_fifo_path = os.path.join(fifos_root, f"{name}.out")
         self.control_fifo_path = os.path.join(fifos_root, f"{name}.ctrl")
+        if indiserver_ctrl_path is None:
+            indiserver_ctrl_path = os.path.join(fifos_root, "indiserver.ctrl")
+        self.indiserver_ctrl_path = indiserver_ctrl_path
         input_pipe, output_pipe, self.control_pipe = self._make_and_open_fifos()
         super().__init__(*args, input_pipe=input_pipe, output_pipe=output_pipe, **kwargs)
+        self._register_with_indiserver()
+
+    def _register_with_indiserver(self):
+        # Added to support resurrector operations
+        # Tell indiserver our FIFOs are open and ready, the same way
+        # libMagAOX/app/indiDriver.hpp does by writing "start <path>"
+        # to indiserver.ctrl. Without this, indiserver only retries a
+        # driver whose initial connection failed via its internal
+        # restart-list timer, which can take far longer than its
+        # nominal 10s under normal conditions.
+        if not exists(self.indiserver_ctrl_path):
+            log.debug(f"No indiserver ctrl FIFO at {self.indiserver_ctrl_path}, skipping registration")
+            return
+        driver_path = os.path.join(self.fifos_root, self.name)
+        fd = os.open(self.indiserver_ctrl_path, os.O_RDWR)
+        try:
+            os.write(fd, f"start {driver_path}\n".encode())
+        finally:
+            os.close(fd)
 
     def start(self):
         if not self.status is ConnectionStatus.CONNECTED:
