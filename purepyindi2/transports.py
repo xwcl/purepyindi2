@@ -347,8 +347,6 @@ class IndiFifoConnection(IndiPipeConnection):
         self.input_fifo_path = os.path.join(fifos_root, f"{name}.in")
         self.output_fifo_path = os.path.join(fifos_root, f"{name}.out")
         self.control_fifo_path = os.path.join(fifos_root, f"{name}.ctrl")
-        if indiserver_ctrl_path is None:
-            indiserver_ctrl_path = os.path.join(fifos_root, "indiserver.ctrl")
         self.indiserver_ctrl_path = indiserver_ctrl_path
         input_pipe, output_pipe, self.control_pipe = self._make_and_open_fifos()
         super().__init__(*args, input_pipe=input_pipe, output_pipe=output_pipe, **kwargs)
@@ -362,9 +360,14 @@ class IndiFifoConnection(IndiPipeConnection):
         # driver whose initial connection failed via its internal
         # restart-list timer, which can take far longer than its
         # nominal 10s under normal conditions.
-        if not exists(self.indiserver_ctrl_path):
-            log.debug(f"No indiserver ctrl FIFO at {self.indiserver_ctrl_path}, skipping registration")
-            return
+        ctrl_path = self.indiserver_ctrl_path
+        if ctrl_path is None:
+            ctrl_path = os.path.join(self.fifos_root, "indiserver.ctrl")
+            if not exists(ctrl_path):
+                log.debug(f"No indiserver ctrl FIFO at {ctrl_path}, skipping registration")
+                return
+        elif not exists(ctrl_path):
+            raise RuntimeError(f"Configured indiserver ctrl FIFO does not exist: {ctrl_path}")
         driver_path = os.path.join(self.fifos_root, self.name)
         fd = os.open(self.indiserver_ctrl_path, os.O_RDWR)
         try:
